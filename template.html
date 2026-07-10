@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Attendance - LMS</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg-page:#f4f6f9; --bg-card:#ffffff; --bg-header:#1e3a5f;
+    --text-primary:#1a1f2b; --text-secondary:#6b7280; --text-on-dark:#ffffff;
+    --radius:12px; --gap:16px;
+    --done:#2e7d32; --mid:#f9a825; --bad:#c62828; --border:#e5e7eb;
+    --att:#2e7d32; --abs:#c62828; --late:#f9a825;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg-page);color:var(--text-primary);}
+  .dashboard-container{max-width:1550px;margin:0 auto;padding:20px;}
+
+  .dashboard-header{background:linear-gradient(135deg,var(--bg-header),#2c5282);color:var(--text-on-dark);padding:20px 26px;border-radius:var(--radius);margin-bottom:var(--gap);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;}
+  .dashboard-header h1{font-size:19px;font-weight:700;margin:0 0 4px 0;}
+  .dashboard-header p{margin:0;font-size:12.5px;opacity:.8;}
+
+  .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end;}
+  .filter-group{display:flex;flex-direction:column;gap:4px;}
+  .filter-group label{font-size:11px;color:rgba(255,255,255,.75);text-transform:uppercase;letter-spacing:.4px;}
+  .reset-btn{align-self:end;padding:8px 14px;border-radius:6px;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;font-size:12px;cursor:pointer;}
+  .reset-btn:hover{background:rgba(255,255,255,.15);}
+  .upload-btn{align-self:end;padding:8px 14px;border-radius:6px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.15);color:#fff;font-size:12px;cursor:pointer;font-weight:600;}
+  .upload-btn:hover{background:rgba(255,255,255,.28);}
+
+  .multiselect{position:relative;}
+  .ms-toggle{padding:7px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;font-size:12.5px;min-width:170px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .ms-toggle-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;}
+  .ms-toggle:hover{background:rgba(255,255,255,.2);}
+  .ms-panel{position:absolute;top:calc(100% + 6px);left:0;z-index:500;background:#ffffff;color:#1a1f2b;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);width:260px;padding:10px;}
+  .ms-panel, .ms-panel *{color:#1a1f2b;}
+  .ms-panel.hidden{display:none;}
+  .ms-search{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;margin-bottom:8px;background:#fff;color:#1a1f2b;}
+  .ms-actions{display:flex;gap:8px;margin-bottom:8px;}
+  .ms-actions button{flex:1;font-size:11px;padding:5px 6px;border-radius:5px;border:1px solid var(--border);background:#f8f9fa;cursor:pointer;color:#374151;font-weight:600;}
+  .ms-actions button:hover{background:#eef0f3;}
+  .ms-options{max-height:230px;overflow-y:auto;}
+  .ms-option{display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:12.5px;border-radius:5px;cursor:pointer;color:#1a1f2b;}
+  .ms-option:hover{background:#f4f6f9;}
+  .ms-option input{margin:0;}
+  .ms-empty{font-size:12px;color:#6b7280;padding:8px 4px;text-align:center;}
+
+  .data-info{font-size:11.5px;color:var(--text-secondary);margin:-8px 0 12px 2px;}
+
+  .tabs{display:flex;gap:8px;margin-bottom:var(--gap);}
+  .tab-btn{padding:10px 18px;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:13px;font-weight:600;cursor:pointer;color:var(--text-secondary);}
+  .tab-btn.active{background:var(--bg-header);color:#fff;border-color:var(--bg-header);}
+
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:var(--gap);margin-bottom:var(--gap);}
+  .kpi-card{background:var(--bg-card);border-radius:var(--radius);padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);border-left:4px solid #cbd5e1;}
+  .kpi-card.ok{border-left-color:var(--done);}
+  .kpi-card.att{border-left-color:var(--att);}
+  .kpi-card.abs{border-left-color:var(--abs);}
+  .kpi-card.late{border-left-color:var(--late);}
+  .kpi-label{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;}
+  .kpi-value{font-size:23px;font-weight:700;margin-bottom:2px;}
+  .kpi-value-pair{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px;}
+  .kpi-value-pair .kpi-value{margin-bottom:0;}
+  .kpi-value-pair .kpi-pct{font-size:23px;font-weight:700;color:var(--text-secondary);}
+  .kpi-value-pair .kpi-sep{color:var(--border);font-weight:400;font-size:18px;}
+  .kpi-sub{font-size:11px;color:var(--text-secondary);}
+  .section-label{font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin:4px 0 8px 2px;}
+
+  .chart-row{display:grid;grid-template-columns:1.3fr 1fr;gap:var(--gap);margin-bottom:var(--gap);}
+  .chart-container{background:var(--bg-card);border-radius:var(--radius);padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .chart-container h3{margin:0 0 4px 0;font-size:14px;font-weight:700;}
+  .chart-container .hint{font-size:11px;color:var(--text-secondary);margin-bottom:12px;}
+  .chart-container canvas{max-height:340px;}
+
+  .heatmap-section{background:var(--bg-card);border-radius:var(--radius);padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:var(--gap);overflow-x:auto;}
+  .heatmap-section h3{margin:0 0 4px 0;font-size:14px;font-weight:700;}
+  .heatmap-section .hint{font-size:11px;color:var(--text-secondary);margin-bottom:12px;}
+  table.heatmap{border-collapse:collapse;font-size:12px;width:100%;}
+  table.heatmap th{padding:8px 10px;text-align:left;color:var(--text-secondary);font-weight:600;white-space:nowrap;border-bottom:2px solid var(--border);}
+  table.heatmap td{padding:6px 8px;text-align:center;white-space:nowrap;border-bottom:1px solid #f0f0f0;}
+  table.heatmap td.rowlabel{text-align:left;font-weight:600;color:var(--text-primary);}
+  .cell{display:inline-flex;align-items:center;justify-content:center;min-width:44px;padding:4px 6px;border-radius:6px;font-weight:600;font-size:11px;color:#fff;}
+  .cell.na{background:#eef0f3;color:#9aa1ab;}
+
+  .table-section{background:var(--bg-card);border-radius:var(--radius);padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow-x:auto;margin-bottom:var(--gap);}
+  .table-section h3{margin:0 0 12px 0;font-size:14px;font-weight:700;}
+  .table-controls{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;}
+  .search-box{padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;min-width:240px;}
+  .row-count{font-size:12px;color:var(--text-secondary);}
+  .export-btn{padding:7px 12px;border-radius:6px;border:1px solid var(--done);background:#eafaf0;color:#1e5c2a;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+  .export-btn:hover{background:#d8f3e2;}
+  table.data-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .data-table thead th{text-align:left;padding:9px 8px;border-bottom:2px solid var(--border);color:var(--text-secondary);font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;cursor:pointer;white-space:nowrap;}
+  .data-table thead th:hover{background:#f8f9fa;}
+  .data-table tbody td{padding:7px 8px;border-bottom:1px solid #f5f5f5;white-space:nowrap;}
+  .data-table tbody tr:hover{background:#f8f9fa;}
+  .status-badge{padding:3px 9px;border-radius:12px;font-size:10.5px;font-weight:700;color:#fff;display:inline-block;}
+  .pagination{display:flex;gap:6px;justify-content:flex-end;margin-top:10px;align-items:center;font-size:12px;}
+  .pagination button{border:1px solid var(--border);background:#fff;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px;}
+  .pagination button:disabled{opacity:.4;cursor:default;}
+
+  .legend{display:flex;gap:16px;font-size:12px;color:var(--text-secondary);margin-top:10px;flex-wrap:wrap;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
+  .dashboard-footer{text-align:center;font-size:12px;color:var(--text-secondary);padding:14px 0;}
+  .hidden{display:none;}
+
+  @media (max-width:900px){
+    .chart-row{grid-template-columns:1fr;}
+    .kpi-row{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+<div class="dashboard-container">
+
+  <header class="dashboard-header">
+    <div>
+      <h1>📊 Dashboard Attendance - LMS</h1>
+      <p>Attendance / Absence / Late — theo Vùng, Chi nhánh, Program, Lớp, Tháng</p>
+    </div>
+    <div class="filters">
+      <div class="filter-group"><label>Tháng</label><div class="multiselect" id="ms-month"></div></div>
+      <div class="filter-group"><label>Vùng</label><div class="multiselect" id="ms-region"></div></div>
+      <div class="filter-group"><label>Chi nhánh</label><div class="multiselect" id="ms-branch"></div></div>
+      <div class="filter-group"><label>Program</label><div class="multiselect" id="ms-program"></div></div>
+      <div class="filter-group"><label>Lớp</label><div class="multiselect" id="ms-class_name"></div></div>
+      <button class="reset-btn" id="reset-filters">↺ Xoá lọc</button>
+      <label class="upload-btn" for="file-upload">📂 Tải file export mới (.xlsx)</label>
+      <input type="file" id="file-upload" accept=".xlsx" style="display:none;">
+    </div>
+  </header>
+  <div class="data-info" id="data-info">Đang dùng dữ liệu mẫu ban đầu.</div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="overview">📈 Tổng quan</button>
+    <button class="tab-btn" data-tab="classes">📚 Theo Lớp</button>
+    <button class="tab-btn" data-tab="students">🧑‍🎓 Theo Học viên</button>
+  </div>
+
+  <!-- ============ TAB: OVERVIEW ============ -->
+  <div id="tab-overview">
+    <div class="section-label">Tổng quan điểm danh</div>
+    <section class="kpi-row">
+      <div class="kpi-card att"><div class="kpi-label">Total Attendance</div><div class="kpi-value-pair"><span class="kpi-value" id="o-kpi-att">0</span><span class="kpi-sep">•</span><span class="kpi-pct" id="o-kpi-att-sub">0%</span></div></div>
+      <div class="kpi-card abs"><div class="kpi-label">Total Absence</div><div class="kpi-value-pair"><span class="kpi-value" id="o-kpi-abs">0</span><span class="kpi-sep">•</span><span class="kpi-pct" id="o-kpi-abs-sub">0%</span></div></div>
+      <div class="kpi-card late"><div class="kpi-label">Total Late</div><div class="kpi-value-pair"><span class="kpi-value" id="o-kpi-late">0</span><span class="kpi-sep">•</span><span class="kpi-pct" id="o-kpi-late-sub">0%</span></div></div>
+    </section>
+
+    <section class="chart-row">
+      <div class="chart-container">
+        <h3>% Attendance theo Vùng</h3>
+        <div class="hint">Tách 3 loại: Attendance / Absence / Late (có trọng số theo số bản ghi)</div>
+        <canvas id="chart-region"></canvas>
+      </div>
+      <div class="chart-container">
+        <h3>% Attendance theo Program</h3>
+        <div class="hint">Tách 3 loại: Attendance / Absence / Late</div>
+        <canvas id="chart-program"></canvas>
+      </div>
+    </section>
+
+    <section class="table-section">
+      <h3>Thống kê theo Vùng / Chi nhánh — Lớp có % Attendance &lt;80%</h3>
+      <div id="region-branch-wrap"></div>
+    </section>
+
+    <section class="chart-row">
+      <div class="chart-container" style="grid-column: span 2;">
+        <h3>Top 15 lớp có % Attendance thấp nhất</h3>
+        <div class="hint">Ưu tiên nhắc giáo viên phụ trách các lớp này</div>
+        <canvas id="chart-class-risk"></canvas>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ TAB: CLASSES ============ -->
+  <div id="tab-classes" class="hidden">
+    <section class="table-section">
+      <h3>Chi tiết theo Lớp (theo Tháng)</h3>
+      <div class="table-controls">
+        <input type="text" class="search-box" id="c-search" placeholder="Tìm theo chi nhánh, lớp, program... (cách nhau bởi dấu phẩy để tìm nhiều)">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="row-count" id="c-row-count">0 dòng</div>
+          <button type="button" class="export-btn" id="c-export">⬇ Xuất Excel</button>
+        </div>
+      </div>
+      <table class="data-table" id="c-table">
+        <thead><tr>
+          <th data-key="region">Vùng</th><th data-key="branch">Chi nhánh</th><th data-key="program">Program</th>
+          <th data-key="class_name">Lớp</th><th data-key="month">Tháng</th>
+          <th data-key="att_rate">Attendance %</th>
+          <th data-key="abs_rate">Absence %</th>
+          <th data-key="late_rate">Late %</th>
+          <th data-key="status">Trạng thái</th>
+        </tr></thead>
+        <tbody id="c-table-body"></tbody>
+      </table>
+      <div class="pagination">
+        <button id="c-prev">‹ Trước</button><span id="c-page-info">1/1</span><button id="c-next">Sau ›</button>
+      </div>
+    </section>
+
+    <section class="table-section">
+      <h3>Danh sách lớp có % Attendance &lt;81%</h3>
+      <div class="table-controls">
+        <div class="row-count" id="low-att-count">0 dòng</div>
+        <button type="button" class="export-btn" id="low-att-export">⬇ Xuất Excel</button>
+      </div>
+      <table class="data-table" id="low-att-table">
+        <thead><tr>
+          <th>Vùng</th><th>Chi nhánh</th><th>Program</th><th>Lớp</th><th>Tháng</th>
+          <th>Attendance %</th><th>Absence %</th><th>Late %</th><th>Trạng thái</th>
+        </tr></thead>
+        <tbody id="low-att-table-body"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <!-- ============ TAB: STUDENTS ============ -->
+  <div id="tab-students" class="hidden">
+    <div class="data-info">Lưu ý: Tab Học viên không có dữ liệu theo Tháng (dữ liệu tổng hợp cả khoá học), nên bộ lọc "Tháng" không áp dụng ở đây.</div>
+    <section class="table-section">
+      <h3>Chi tiết theo Học viên</h3>
+      <div class="table-controls">
+        <input type="text" class="search-box" id="s-search" placeholder="Tìm theo tên, mã HV, lớp... (cách nhau bởi dấu phẩy để tìm nhiều)">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="row-count" id="s-row-count">0 dòng</div>
+          <button type="button" class="export-btn" id="s-export">⬇ Xuất Excel</button>
+        </div>
+      </div>
+      <table class="data-table" id="s-table">
+        <thead><tr>
+          <th data-key="region">Vùng</th><th data-key="branch">Chi nhánh</th><th data-key="program">Program</th>
+          <th data-key="class_name">Lớp</th><th data-key="student_id">Mã HV</th><th data-key="name">Tên HV</th>
+          <th data-key="att_rate">Attendance %</th>
+          <th data-key="abs_rate">Absence %</th>
+          <th data-key="late_rate">Late %</th>
+          <th data-key="status">Trạng thái</th>
+        </tr></thead>
+        <tbody id="s-table-body"></tbody>
+      </table>
+      <div class="pagination">
+        <button id="s-prev">‹ Trước</button><span id="s-page-info">1/1</span><button id="s-next">Sau ›</button>
+      </div>
+    </section>
+  </div>
+
+  <footer class="dashboard-footer">
+    Cập nhật lần đầu: <span id="data-date"></span> &nbsp;•&nbsp; Dùng nút "Tải file export mới" mỗi tháng để cập nhật số liệu
+  </footer>
+</div>
+
+<script>
+const CLASS_DATA = __CLASS_DATA__;
+const STUDENT_DATA = __STUDENT_DATA__;
+
+// Chi nhánh -> Vùng. Nếu mở chi nhánh mới, thêm 1 dòng vào đây theo đúng định dạng.
+const REGION_MAP = __REGION_MAP__;
+
+const COLORS = { done:'#2e7d32', mid:'#f9a825', bad:'#c62828', att:'#2e7d32', abs:'#c62828', late:'#f9a825' };
+
+function rateColor(pct){
+  if (pct >= 95) return COLORS.done;
+  if (pct >= 50) return COLORS.mid;
+  return COLORS.bad;
+}
+function statusOf(pct){
+  if (pct >= 95) return 'Rất tốt';
+  if (pct >= 80) return 'Tốt';
+  if (pct >= 50) return 'Cần chú ý';
+  return 'Cần can thiệp gấp';
+}
+function safeDiv(a,b){ return b ? (a/b) : 0; }
+
+// d: {..., attendance, absence, late}. Rate = phần trăm trên tổng (attendance+absence+late), làm tròn ở lúc hiển thị.
+function processRow(d){
+  const totalAll = (d.attendance||0) + (d.absence||0) + (d.late||0);
+  const att_rate = safeDiv(d.attendance, totalAll) * 100;
+  const abs_rate = safeDiv(d.absence, totalAll) * 100;
+  const late_rate = safeDiv(d.late, totalAll) * 100;
+  return {...d, totalAll, att_rate, abs_rate, late_rate, status: statusOf(att_rate)};
+}
+
+class MultiSelect{
+  static instances = [];
+
+  constructor(containerId, label, onChange){
+    this.container = document.getElementById(containerId);
+    this.label = label;
+    this.onChange = onChange;
+    this.options = [];
+    this.selected = new Set();
+    this.searchTerm = '';
+    this.isOpen = false;
+    this.render();
+    MultiSelect.instances.push(this);
+  }
+
+  static initOutsideClickHandler(){
+    if (MultiSelect._handlerInit) return;
+    MultiSelect._handlerInit = true;
+    document.addEventListener('click', (e) => {
+      MultiSelect.instances.forEach(m => { if (m.isOpen && !m.container.contains(e.target)) m.close(); });
+    });
+  }
+
+  render(){
+    this.container.innerHTML = `
+      <button type="button" class="ms-toggle"><span class="ms-toggle-label">Tất cả</span><span>▾</span></button>
+      <div class="ms-panel hidden">
+        <input type="text" class="ms-search" placeholder="Tìm...">
+        <div class="ms-actions">
+          <button type="button" class="ms-all">Chọn tất cả</button>
+          <button type="button" class="ms-none">Bỏ chọn</button>
+        </div>
+        <div class="ms-options"></div>
+      </div>`;
+    this.toggleBtn = this.container.querySelector('.ms-toggle');
+    this.toggleLabel = this.container.querySelector('.ms-toggle-label');
+    this.panel = this.container.querySelector('.ms-panel');
+    this.searchInput = this.container.querySelector('.ms-search');
+    this.optionsWrap = this.container.querySelector('.ms-options');
+
+    this.toggleBtn.addEventListener('click', (e) => { e.stopPropagation(); this.isOpen ? this.close() : this.open(); });
+    this.searchInput.addEventListener('click', e => e.stopPropagation());
+    this.searchInput.addEventListener('input', () => { this.searchTerm = this.searchInput.value.toLowerCase(); this.renderOptions(); });
+    this.container.querySelector('.ms-all').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.filteredOptions().forEach(v => this.selected.add(v));
+      this.renderOptions(); this.updateLabel(); this.onChange(this.selected);
+    });
+    this.container.querySelector('.ms-none').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.selected.clear();
+      this.renderOptions(); this.updateLabel(); this.onChange(this.selected);
+    });
+  }
+
+  filteredOptions(){
+    if (!this.searchTerm) return this.options;
+    return this.options.filter(o => String(o).toLowerCase().includes(this.searchTerm));
+  }
+
+  renderOptions(){
+    const opts = this.filteredOptions();
+    if (!opts.length){ this.optionsWrap.innerHTML = '<div class="ms-empty">Không có kết quả</div>'; return; }
+    this.optionsWrap.innerHTML = opts.map(o => {
+      const checked = this.selected.has(o) ? 'checked' : '';
+      const safe = String(o).replace(/"/g,'&quot;');
+      return `<label class="ms-option"><input type="checkbox" value="${safe}" ${checked}><span>${o}</span></label>`;
+    }).join('');
+    this.optionsWrap.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('click', e => e.stopPropagation());
+      cb.addEventListener('change', () => {
+        if (cb.checked) this.selected.add(cb.value); else this.selected.delete(cb.value);
+        this.updateLabel();
+        this.onChange(this.selected);
+      });
+    });
+  }
+
+  updateLabel(){
+    if (this.selected.size===0) this.toggleLabel.textContent = 'Tất cả';
+    else if (this.selected.size===1) this.toggleLabel.textContent = Array.from(this.selected)[0];
+    else this.toggleLabel.textContent = `${this.selected.size} đã chọn`;
+  }
+
+  setOptions(options){
+    this.options = options;
+    this.selected.forEach(v => { if (!options.includes(v)) this.selected.delete(v); });
+    this.renderOptions();
+    this.updateLabel();
+  }
+
+  clearSelection(){
+    this.selected.clear();
+    this.renderOptions();
+    this.updateLabel();
+  }
+
+  open(){
+    MultiSelect.instances.forEach(m => { if (m!==this) m.close(); });
+    this.isOpen = true; this.panel.classList.remove('hidden');
+    void this.panel.offsetHeight;
+    this.searchInput.value=''; this.searchTerm=''; this.renderOptions();
+    this.searchInput.focus();
+  }
+  close(){ this.isOpen = false; this.panel.classList.add('hidden'); }
+}
+MultiSelect.initOutsideClickHandler();
+
+class Dashboard{
+  // Các chiều lọc dùng chung cho lớp (Class Summary Monthly). Học viên dùng tất cả trừ 'month' (không có dữ liệu theo tháng).
+  static FILTER_DIMS = ['region','branch','program','class_name','month'];
+  static STUDENT_FILTER_DIMS = ['region','branch','program','class_name'];
+
+  constructor(classData, studentData){
+    this.loadNewData(classData, studentData, 'dữ liệu mẫu ban đầu');
+    this.activeTab = 'overview';
+    this.cSort = { key:'att_rate', dir:'asc' }; this.cPage = 0; this.cPageSize = 15; this.cSearch = [];
+    this.sSort = { key:'att_rate', dir:'asc' }; this.sPage = 0; this.sPageSize = 15; this.sSearch = [];
+    this.charts = {};
+    this.init();
+  }
+
+  init(){
+    document.getElementById('data-date').textContent = new Date().toLocaleDateString('vi-VN');
+    this.setupTabs();
+    this.setupFilters();
+    this.setupTableEvents();
+    this.setupUpload();
+    this.render();
+  }
+
+  loadNewData(classData, studentData, sourceLabel){
+    this.classData = classData.map(processRow);
+    this.studentData = studentData.map(processRow);
+    this.filters = {};
+    Dashboard.FILTER_DIMS.forEach(dim => { this.filters[dim] = new Set(); });
+    this.cPage = 0; this.sPage = 0;
+    const info = document.getElementById('data-info');
+    if (info) info.textContent = `Nguồn dữ liệu: ${sourceLabel} • ${this.classData.length.toLocaleString('vi-VN')} lượt lớp/tháng, ${this.studentData.length.toLocaleString('vi-VN')} học viên`;
+  }
+
+  setupTabs(){
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        this.activeTab = btn.dataset.tab;
+        document.getElementById('tab-overview').classList.toggle('hidden', this.activeTab !== 'overview');
+        document.getElementById('tab-classes').classList.toggle('hidden', this.activeTab !== 'classes');
+        document.getElementById('tab-students').classList.toggle('hidden', this.activeTab !== 'students');
+        this.render();
+      });
+    });
+  }
+
+  setupUpload(){
+    document.getElementById('file-upload').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try{
+          const wb = XLSX.read(evt.target.result, {type:'array'});
+          const classSheet = wb.Sheets['Class Summary Monthly'];
+          const studentSheet = wb.Sheets['Student Summary'];
+          if (!classSheet || !studentSheet){
+            alert('Không tìm thấy sheet "Class Summary Monthly" hoặc "Student Summary" trong file. Vui lòng kiểm tra lại tên sheet.');
+            return;
+          }
+          const classRaw = XLSX.utils.sheet_to_json(classSheet, {header:1});
+          const studentRaw = XLSX.utils.sheet_to_json(studentSheet, {header:1});
+          const newClasses = this.parseClassSheet(classRaw);
+          const newStudents = this.parseStudentSheet(studentRaw);
+
+          const unmapped = new Set();
+          [...newClasses, ...newStudents].forEach(d => { if (d.region === 'Chưa gán vùng') unmapped.add(d.branch); });
+          if (unmapped.size){
+            alert('Lưu ý: ' + unmapped.size + ' chi nhánh chưa có trong bảng ánh xạ Vùng, sẽ hiện "Chưa gán vùng":\\n' + Array.from(unmapped).join('\\n'));
+          }
+
+          this.loadNewData(newClasses, newStudents, file.name);
+          this.setupFiltersOnly();
+          this.render();
+        }catch(err){
+          alert('Có lỗi khi đọc file: ' + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  parseClassSheet(rows){
+    const header = rows[0];
+    const idx = {};
+    header.forEach((h, i) => { idx[h] = i; });
+    const need = (r,key) => { const v = r[idx[key]]; return (v === undefined || v === null) ? 0 : v; };
+    const out = [];
+    for (let i=1; i<rows.length; i++){
+      const r = rows[i];
+      if (!r || r[idx['Branch']] === undefined) continue;
+      const branch = String(r[idx['Branch']]).trim();
+      out.push({
+        region: REGION_MAP[branch] || 'Chưa gán vùng',
+        branch: branch,
+        program: r[idx['Program']],
+        class_name: r[idx['Class']],
+        month: r[idx['Month']],
+        records: need(r,'Attendance Records'),
+        attendance: need(r,'Attendance'),
+        absence: need(r,'Absence'),
+        late: need(r,'Late'),
+      });
+    }
+    return out;
+  }
+
+  parseStudentSheet(rows){
+    const header = rows[0];
+    const idx = {};
+    header.forEach((h, i) => { idx[h] = i; });
+    const need = (r,key) => { const v = r[idx[key]]; return (v === undefined || v === null) ? 0 : v; };
+    const out = [];
+    for (let i=1; i<rows.length; i++){
+      const r = rows[i];
+      if (!r || r[idx['Branch']] === undefined) continue;
+      const branch = String(r[idx['Branch']]).trim();
+      out.push({
+        region: REGION_MAP[branch] || 'Chưa gán vùng',
+        branch: branch,
+        program: r[idx['Program']],
+        class_name: r[idx['Class']],
+        student_id: r[idx['StudentID']],
+        name: r[idx['Student']] ? String(r[idx['Student']]).trim() : '',
+        grade: r[idx['Grade']],
+        records: need(r,'Attendance Records'),
+        attendance: need(r,'Attendance'),
+        absence: need(r,'Absence'),
+        late: need(r,'Late'),
+      });
+    }
+    return out;
+  }
+
+  uniq(dataset, field, filterFn){
+    const set = new Set();
+    dataset.filter(filterFn).forEach(d => {
+      const v = d[field];
+      if (v !== undefined && v !== null && v !== '') set.add(String(v));
+    });
+    const arr = Array.from(set);
+    const allNumeric = arr.length>0 && arr.every(v => v!=='' && !isNaN(v));
+    return allNumeric ? arr.sort((a,b)=>Number(a)-Number(b)) : arr.sort((a,b)=>a.localeCompare(b,'vi'));
+  }
+
+  passesOthers(d, exceptKey){
+    const f = this.filters;
+    const check = (key) => key===exceptKey || f[key].size===0 || f[key].has(String(d[key]));
+    return Dashboard.FILTER_DIMS.every(check);
+  }
+
+  refreshCascade(){
+    const base = this.classData;
+    Dashboard.FILTER_DIMS.forEach(dim => {
+      this.ms[dim].setOptions(this.uniq(base, dim, d => this.passesOthers(d, dim)));
+    });
+  }
+
+  setupFiltersOnly(){
+    if (this.ms) Object.values(this.ms).forEach(m => m.clearSelection());
+    this.refreshCascade();
+  }
+
+  setupFilters(){
+    const labels = { region:'Vùng', branch:'Chi nhánh', program:'Program', class_name:'Lớp', month:'Tháng' };
+    this.filters = {};
+    Dashboard.FILTER_DIMS.forEach(dim => { this.filters[dim] = new Set(); });
+
+    const onChange = (key, selectedSet) => {
+      this.filters[key] = selectedSet;
+      this.refreshCascade();
+      this.cPage=0; this.sPage=0; this.render();
+    };
+    this.ms = {};
+    Dashboard.FILTER_DIMS.forEach(dim => {
+      this.ms[dim] = new MultiSelect('ms-'+dim, labels[dim], (s)=>onChange(dim, s));
+    });
+    this.refreshCascade();
+
+    document.getElementById('reset-filters').addEventListener('click', () => {
+      Dashboard.FILTER_DIMS.forEach(dim => { this.filters[dim] = new Set(); });
+      Object.values(this.ms).forEach(m => m.clearSelection());
+      this.refreshCascade(); this.cPage=0; this.sPage=0; this.render();
+    });
+  }
+
+  setupTableEvents(){
+    document.getElementById('c-search').addEventListener('input', e => { this.cSearch = e.target.value.toLowerCase().split(',').map(s=>s.trim()).filter(Boolean); this.cPage=0; this.renderClassTable(); });
+    document.getElementById('s-search').addEventListener('input', e => { this.sSearch = e.target.value.toLowerCase().split(',').map(s=>s.trim()).filter(Boolean); this.sPage=0; this.renderStudentTable(); });
+    document.getElementById('c-export').addEventListener('click', () => this.exportClassExcel());
+    document.getElementById('low-att-export').addEventListener('click', () => this.exportLowAttendanceExcel());
+    document.getElementById('s-export').addEventListener('click', () => this.exportStudentExcel());
+
+    document.querySelectorAll('#c-table thead th').forEach(th => th.addEventListener('click', () => {
+      if (this.cSort.key === th.dataset.key) this.cSort.dir = this.cSort.dir==='asc'?'desc':'asc';
+      else { this.cSort.key = th.dataset.key; this.cSort.dir='asc'; }
+      this.renderClassTable();
+    }));
+    document.querySelectorAll('#s-table thead th').forEach(th => th.addEventListener('click', () => {
+      if (this.sSort.key === th.dataset.key) this.sSort.dir = this.sSort.dir==='asc'?'desc':'asc';
+      else { this.sSort.key = th.dataset.key; this.sSort.dir='asc'; }
+      this.renderStudentTable();
+    }));
+
+    document.getElementById('c-prev').addEventListener('click', () => { if (this.cPage>0){ this.cPage--; this.renderClassTable(); }});
+    document.getElementById('c-next').addEventListener('click', () => {
+      const maxPage = Math.max(0, Math.ceil(this.getFilteredClasses().length / this.cPageSize) - 1);
+      if (this.cPage < maxPage){ this.cPage++; this.renderClassTable(); }
+    });
+    document.getElementById('s-prev').addEventListener('click', () => { if (this.sPage>0){ this.sPage--; this.renderStudentTable(); }});
+    document.getElementById('s-next').addEventListener('click', () => {
+      const maxPage = Math.max(0, Math.ceil(this.getFilteredStudents().length / this.sPageSize) - 1);
+      if (this.sPage < maxPage){ this.sPage++; this.renderStudentTable(); }
+    });
+  }
+
+  matchesFilter(d){
+    const f = this.filters;
+    return Dashboard.FILTER_DIMS.every(key => f[key].size===0 || f[key].has(String(d[key])));
+  }
+  matchesStudentFilter(d){
+    const f = this.filters;
+    return Dashboard.STUDENT_FILTER_DIMS.every(key => f[key].size===0 || f[key].has(String(d[key])));
+  }
+  getFilteredClasses(){ return this.classData.filter(d => this.matchesFilter(d)); }
+  getFilteredStudents(){ return this.studentData.filter(d => this.matchesStudentFilter(d)); }
+
+  render(){
+    if (this.activeTab === 'overview'){
+      this.renderOverviewKPIs(); this.renderOverviewCharts(); this.renderRegionBranchTable();
+    } else if (this.activeTab === 'classes'){
+      this.renderClassTable(); this.renderLowAttendanceList();
+    } else {
+      this.renderStudentTable();
+    }
+  }
+
+  weightedTotals(rows){
+    let att=0, abs=0, late=0;
+    rows.forEach(r => { att += r.attendance||0; abs += r.absence||0; late += r.late||0; });
+    return { att, abs, late, total: att+abs+late };
+  }
+
+  renderOverviewKPIs(){
+    const data = this.getFilteredClasses();
+    const t = this.weightedTotals(data);
+    const pctAtt = t.total ? (t.att/t.total*100) : 0;
+    const pctAbs = t.total ? (t.abs/t.total*100) : 0;
+    const pctLate = t.total ? (t.late/t.total*100) : 0;
+    document.getElementById('o-kpi-att').textContent = t.att.toLocaleString('vi-VN');
+    document.getElementById('o-kpi-att-sub').textContent = pctAtt.toFixed(2)+'%';
+    document.getElementById('o-kpi-abs').textContent = t.abs.toLocaleString('vi-VN');
+    document.getElementById('o-kpi-abs-sub').textContent = pctAbs.toFixed(2)+'%';
+    document.getElementById('o-kpi-late').textContent = t.late.toLocaleString('vi-VN');
+    document.getElementById('o-kpi-late-sub').textContent = pctLate.toFixed(2)+'%';
+  }
+
+  upsertChart(canvasId, type, data, extraOptions){
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    if (this.charts[canvasId]) this.charts[canvasId].destroy();
+    this.charts[canvasId] = new Chart(ctx, {
+      type, data,
+      options: Object.assign({ responsive:true, maintainAspectRatio:false, animation:false,
+        plugins:{ legend:{ position:'bottom', labels:{ boxWidth:12, font:{size:11} } } } }, extraOptions)
+    });
+    document.getElementById(canvasId).parentElement.style.height = '360px';
+  }
+
+  groupBy(data, field){
+    const agg = {};
+    data.forEach(d => { agg[d[field]] = agg[d[field]] || []; agg[d[field]].push(d); });
+    return agg;
+  }
+
+  rateOf(rows){
+    const t = this.weightedTotals(rows);
+    return { att: t.total? t.att/t.total*100:0, abs: t.total? t.abs/t.total*100:0, late: t.total? t.late/t.total*100:0 };
+  }
+
+  renderOverviewCharts(){
+    const data = this.getFilteredClasses();
+
+    const regionAgg = this.groupBy(data, 'region');
+    const regionLabels = Object.keys(regionAgg).sort((a,b)=>a.localeCompare(b,'vi'));
+    this.upsertChart('chart-region', 'bar', {
+      labels: regionLabels,
+      datasets: [
+        { label:'Attendance', data: regionLabels.map(r=>this.rateOf(regionAgg[r]).att.toFixed(2)), backgroundColor: COLORS.att },
+        { label:'Absence', data: regionLabels.map(r=>this.rateOf(regionAgg[r]).abs.toFixed(2)), backgroundColor: COLORS.abs },
+        { label:'Late', data: regionLabels.map(r=>this.rateOf(regionAgg[r]).late.toFixed(2)), backgroundColor: COLORS.late },
+      ]
+    }, { indexAxis:'y', scales:{ x:{ suggestedMax:100 } } });
+
+    const progAgg = this.groupBy(data, 'program');
+    const progLabels = Object.keys(progAgg);
+    this.upsertChart('chart-program', 'bar', {
+      labels: progLabels,
+      datasets: [
+        { label:'Attendance', data: progLabels.map(p=>this.rateOf(progAgg[p]).att.toFixed(2)), backgroundColor: COLORS.att },
+        { label:'Absence', data: progLabels.map(p=>this.rateOf(progAgg[p]).abs.toFixed(2)), backgroundColor: COLORS.abs },
+        { label:'Late', data: progLabels.map(p=>this.rateOf(progAgg[p]).late.toFixed(2)), backgroundColor: COLORS.late },
+      ]
+    }, { scales:{ y:{ suggestedMax:100 } } });
+
+    const worst = [...data].sort((a,b)=>a.att_rate-b.att_rate).slice(0,15);
+    this.upsertChart('chart-class-risk', 'bar', {
+      labels: worst.map(d => `${d.branch.replace('Scots English ','')} · ${d.class_name} (${d.month})`),
+      datasets: [{ label:'% Attendance', data: worst.map(d=>d.att_rate.toFixed(2)), backgroundColor: worst.map(d=>rateColor(d.att_rate)) }]
+    }, { indexAxis:'y', scales:{ x:{ suggestedMax:100 } }, plugins:{legend:{display:false}} });
+  }
+
+  renderRegionBranchTable(){
+    const data = this.getFilteredClasses();
+    const regionAgg = this.groupBy(data, 'region');
+    const regionLabels = Object.keys(regionAgg).sort((a,b)=>a.localeCompare(b,'vi'));
+
+    let html = '<table class="data-table"><thead><tr><th>Vùng</th><th>Chi nhánh</th><th>Tổng số lớp (lượt/tháng)</th><th>Số lớp &lt;80%</th><th>Tỷ lệ lớp &lt;80%</th></tr></thead><tbody>';
+    regionLabels.forEach(region => {
+      const regionRows = regionAgg[region];
+      const branchAgg = this.groupBy(regionRows, 'branch');
+      const branchLabels = Object.keys(branchAgg).sort((a,b)=>a.localeCompare(b,'vi'));
+      const regionTotal = regionRows.length;
+      const regionUnder80 = regionRows.filter(d => d.att_rate < 81).length;
+      const regionPct = regionTotal ? (regionUnder80/regionTotal*100) : 0;
+      html += `<tr style="background:#f4f6f9;font-weight:700;"><td>${region}</td><td>— Tổng Vùng —</td><td>${regionTotal}</td><td>${regionUnder80}</td><td>${regionPct.toFixed(2)}%</td></tr>`;
+      branchLabels.forEach(branch => {
+        const rows = branchAgg[branch];
+        const total = rows.length;
+        const under80 = rows.filter(d => d.att_rate < 81).length;
+        const pct = total ? (under80/total*100) : 0;
+        html += `<tr><td></td><td>${branch}</td><td>${total}</td><td>${under80}</td><td><span class="status-badge" style="background:${pct>0?rateColor(100-pct):COLORS.done}">${pct.toFixed(2)}%</span></td></tr>`;
+      });
+    });
+    html += '</tbody></table>';
+    document.getElementById('region-branch-wrap').innerHTML = html;
+  }
+
+  sortRows(data, sortCfg){
+    const {key, dir} = sortCfg; const mult = dir==='asc'?1:-1;
+    return [...data].sort((a,b) => {
+      let va=a[key], vb=b[key];
+      if (va === null || va===undefined) va = -1; if (vb === null || vb===undefined) vb = -1;
+      if (typeof va === 'string') return va.localeCompare(vb,'vi')*mult;
+      return ((va??0)-(vb??0))*mult;
+    });
+  }
+
+  getClassRows(){
+    let data = this.getFilteredClasses();
+    if (this.cSearch.length) data = data.filter(d => { const hay = [d.branch,d.class_name,d.program,d.month].join(' ').toLowerCase(); return this.cSearch.some(term => hay.includes(term)); });
+    return this.sortRows(data, this.cSort);
+  }
+
+  getStudentRows(){
+    let data = this.getFilteredStudents();
+    if (this.sSearch.length) data = data.filter(d => { const hay = [d.name,d.student_id,d.class_name,d.branch].join(' ').toLowerCase(); return this.sSearch.some(term => hay.includes(term)); });
+    return this.sortRows(data, this.sSort);
+  }
+
+  renderClassTable(){
+    const data = this.getClassRows();
+    document.getElementById('c-row-count').textContent = `${data.length.toLocaleString('vi-VN')} dòng`;
+    const maxPage = Math.max(0, Math.ceil(data.length/this.cPageSize)-1);
+    if (this.cPage>maxPage) this.cPage=maxPage;
+    const page = data.slice(this.cPage*this.cPageSize, this.cPage*this.cPageSize+this.cPageSize);
+    document.getElementById('c-table-body').innerHTML = page.map(d => `
+      <tr><td>${d.region}</td><td>${d.branch}</td><td>${d.program}</td><td>${d.class_name}</td>
+      <td>${d.month ?? ''}</td>
+      <td>${d.att_rate.toFixed(2)}%</td>
+      <td>${d.abs_rate.toFixed(2)}%</td>
+      <td>${d.late_rate.toFixed(2)}%</td>
+      <td><span class="status-badge" style="background:${rateColor(d.att_rate)}">${d.status}</span></td></tr>
+    `).join('');
+    document.getElementById('c-page-info').textContent = `${this.cPage+1}/${maxPage+1}`;
+    document.getElementById('c-prev').disabled = this.cPage===0;
+    document.getElementById('c-next').disabled = this.cPage>=maxPage;
+  }
+
+  getLowAttendanceRows(){
+    return this.sortRows(this.getFilteredClasses().filter(d => d.att_rate < 81), { key:'att_rate', dir:'asc' });
+  }
+
+  renderLowAttendanceList(){
+    const data = this.getLowAttendanceRows();
+    document.getElementById('low-att-count').textContent = `${data.length.toLocaleString('vi-VN')} dòng`;
+    document.getElementById('low-att-table-body').innerHTML = data.map(d => `
+      <tr><td>${d.region}</td><td>${d.branch}</td><td>${d.program}</td><td>${d.class_name}</td>
+      <td>${d.month ?? ''}</td>
+      <td>${d.att_rate.toFixed(2)}%</td>
+      <td>${d.abs_rate.toFixed(2)}%</td>
+      <td>${d.late_rate.toFixed(2)}%</td>
+      <td><span class="status-badge" style="background:${rateColor(d.att_rate)}">${d.status}</span></td></tr>
+    `).join('');
+  }
+
+  renderStudentTable(){
+    const data = this.getStudentRows();
+    document.getElementById('s-row-count').textContent = `${data.length.toLocaleString('vi-VN')} dòng`;
+    const maxPage = Math.max(0, Math.ceil(data.length/this.sPageSize)-1);
+    if (this.sPage>maxPage) this.sPage=maxPage;
+    const page = data.slice(this.sPage*this.sPageSize, this.sPage*this.sPageSize+this.sPageSize);
+    document.getElementById('s-table-body').innerHTML = page.map(d => `
+      <tr><td>${d.region}</td><td>${d.branch}</td><td>${d.program}</td><td>${d.class_name}</td>
+      <td>${d.student_id}</td><td>${d.name}</td>
+      <td>${d.att_rate.toFixed(2)}%</td>
+      <td>${d.abs_rate.toFixed(2)}%</td>
+      <td>${d.late_rate.toFixed(2)}%</td>
+      <td><span class="status-badge" style="background:${rateColor(d.att_rate)}">${d.status}</span></td></tr>
+    `).join('');
+    document.getElementById('s-page-info').textContent = `${this.sPage+1}/${maxPage+1}`;
+    document.getElementById('s-prev').disabled = this.sPage===0;
+    document.getElementById('s-next').disabled = this.sPage>=maxPage;
+  }
+
+  todayStamp(){
+    const d = new Date();
+    const p = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+  }
+
+  exportClassExcel(){
+    const data = this.getClassRows();
+    if (!data.length){ alert('Không có dữ liệu để xuất (kiểm tra lại bộ lọc).'); return; }
+    const rows = data.map(d => ({
+      'Vùng': d.region, 'Chi nhánh': d.branch, 'Program': d.program, 'Lớp': d.class_name, 'Tháng': d.month,
+      'Attendance %': Number(d.att_rate.toFixed(2)),
+      'Absence %': Number(d.abs_rate.toFixed(2)),
+      'Late %': Number(d.late_rate.toFixed(2)),
+      'Trạng thái': d.status,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length, 14) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Chi tiet theo Lop');
+    XLSX.writeFile(wb, `Chi_tiet_theo_Lop_${this.todayStamp()}.xlsx`);
+  }
+
+  exportLowAttendanceExcel(){
+    const data = this.getLowAttendanceRows();
+    if (!data.length){ alert('Không có lớp nào <81% trong phạm vi lọc hiện tại.'); return; }
+    const rows = data.map(d => ({
+      'Vùng': d.region, 'Chi nhánh': d.branch, 'Program': d.program, 'Lớp': d.class_name, 'Tháng': d.month,
+      'Attendance %': Number(d.att_rate.toFixed(2)),
+      'Absence %': Number(d.abs_rate.toFixed(2)),
+      'Late %': Number(d.late_rate.toFixed(2)),
+      'Trạng thái': d.status,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length, 14) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Lop duoi 81%');
+    XLSX.writeFile(wb, `Lop_duoi_81_${this.todayStamp()}.xlsx`);
+  }
+
+  exportStudentExcel(){
+    const data = this.getStudentRows();
+    if (!data.length){ alert('Không có dữ liệu để xuất (kiểm tra lại bộ lọc).'); return; }
+    const rows = data.map(d => ({
+      'Vùng': d.region, 'Chi nhánh': d.branch, 'Program': d.program, 'Lớp': d.class_name,
+      'Mã HV': d.student_id, 'Tên HV': d.name,
+      'Attendance %': Number(d.att_rate.toFixed(2)),
+      'Absence %': Number(d.abs_rate.toFixed(2)),
+      'Late %': Number(d.late_rate.toFixed(2)),
+      'Trạng thái': d.status,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length, 14) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Chi tiet theo Hoc vien');
+    XLSX.writeFile(wb, `Chi_tiet_theo_Hoc_vien_${this.todayStamp()}.xlsx`);
+  }
+}
+
+const dashboard = new Dashboard(CLASS_DATA, STUDENT_DATA);
+</script>
+</body>
+</html>
