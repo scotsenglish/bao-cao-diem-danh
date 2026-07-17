@@ -1,0 +1,13 @@
+{
+  "name": "attendance-dashboard-scraper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Scraper tự động lấy dữ liệu Attendance từ i-Learning LMS cho dashboard.",
+  "scripts": {
+    "scrape": "node scrape.js"
+  },
+  "dependencies": {
+    "playwright": "^1.48.0",
+    "xlsx": "^0.18.5"
+  }
+}
