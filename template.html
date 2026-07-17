@@ -748,6 +748,10 @@ class Dashboard{
 
     try{
       const res = await appsScriptGet({ action:'availableMonths' });
+      if (res && res.error){
+        document.querySelector('#tab-detail .data-info').textContent = 'Lỗi từ Apps Script: ' + res.error;
+        return;
+      }
       const months = (res && res.months) || [];
       populateSelect(document.getElementById('nr-month-select'), months);
       populateSelect(document.getElementById('lr-month-select'), months);
@@ -765,6 +769,7 @@ class Dashboard{
       document.getElementById('nr-row-count').textContent = 'Đang tải...';
       try{
         const res = await appsScriptGet({ action:'monthNumber', month });
+        if (res && res.error) return alert('Lỗi từ Apps Script: ' + res.error);
         this.numberRawView.setData((res && res.rows) || []);
       }catch(err){ alert('Lỗi tải dữ liệu: ' + err.message); }
     });
@@ -775,6 +780,7 @@ class Dashboard{
       document.getElementById('lr-row-count').textContent = 'Đang tải...';
       try{
         const res = await appsScriptGet({ action:'monthList', month });
+        if (res && res.error) return alert('Lỗi từ Apps Script: ' + res.error);
         this.listRawView.setData((res && res.rows) || []);
       }catch(err){ alert('Lỗi tải dữ liệu: ' + err.message); }
     });
@@ -791,6 +797,7 @@ class Dashboard{
       if (!term){ panel.classList.add('hidden'); panel.innerHTML=''; return; }
       try{
         const res = await appsScriptGet({ action:'studentSearch', q: term });
+        if (res && res.error){ panel.innerHTML = `<div class="ms-empty">Lỗi từ Apps Script: ${res.error}</div>`; panel.classList.remove('hidden'); return; }
         const results = (res && res.results) || [];
         if (!results.length){ panel.innerHTML = '<div class="ms-empty">Không tìm thấy học viên</div>'; panel.classList.remove('hidden'); return; }
         panel.innerHTML = results.map(r => `
@@ -827,6 +834,7 @@ class Dashboard{
     document.getElementById('lk-loading').classList.remove('hidden');
     try{
       const res = await appsScriptGet({ action:'studentSessions', student_id: studentId, class_name: className });
+      if (res && res.error){ alert('Lỗi từ Apps Script: ' + res.error); return; }
       this.renderLookupResult(res);
     }catch(err){
       alert('Lỗi tải dữ liệu học viên: ' + err.message);
