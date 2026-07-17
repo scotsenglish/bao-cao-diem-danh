@@ -1,10 +1,11 @@
 /**
  * scrape.js — Tự động lấy dữ liệu Attendance từ i-Learning LMS (Playwright)
- * và xuất ra data/latest.xlsx (4 sheet), sau đó build.py sẽ build ra index.html.
+ * và xuất ra data/latest.xlsx (3 sheet), sau đó build.py sẽ build ra index.html.
  *
  * Cách hoạt động:
- *   1. Đăng nhập LMS bằng Playwright (dùng chung LMS_USERNAME / LMS_PASSWORD
- *      với scraper tra cứu điểm i-Learning hiện có).
+ *   1. Đăng nhập LMS bằng Playwright (dùng chung LMS_LOGIN_ID / LMS_LOGIN_PASSWORD
+ *      với scraper tra cứu điểm i-Learning hiện có — copy nguyên cơ chế login
+ *      từ scrape.js của repo ilearning-tra-cuu-diem).
  *   2. Trong context của trang đã đăng nhập, gọi lại đúng các API nội bộ
  *      (.asmx) mà file export tay của bạn đang dùng — không có vấn đề CORS
  *      vì fetch() chạy same-origin bên trong trang.
@@ -16,7 +17,7 @@
  *        - Class Summary Monthly
  *
  * Biến môi trường cần có (GitHub Actions secrets):
- *   LMS_USERNAME, LMS_PASSWORD   — dùng chung với scraper i-Learning điểm số
+ *   LMS_LOGIN_ID, LMS_LOGIN_PASSWORD   — dùng chung với scraper i-Learning điểm số
  *
  * Biến có thể chỉnh:
  *   MONTHS_BACK   — số tháng lùi về (mặc định 3: tháng hiện tại + 2 tháng trước).
@@ -24,14 +25,6 @@
  *                   nhưng lưu ý index.html sẽ phình to hơn tương ứng.
  *   STAFF_ID      — id nhân viên dùng để gọi API (mặc định 9072, lấy từ script
  *                   export tay của bạn). Đổi qua biến môi trường STAFF_ID nếu cần.
- *
- * *** PHẦN CẦN BẠN ĐIỀN: hàm loginToLMS() bên dưới ***
- * Mình chưa có URL/selector đăng nhập thật của lms.scotsenglish.edu.vn (không
- * truy cập được hệ thống nội bộ của bạn). Vì đây là CÙNG một LMS mà scraper
- * i-Learning tra cứu điểm của bạn đang đăng nhập thành công, cách nhanh nhất
- * là copy nguyên phần code đăng nhập từ scrape.js của repo i-Learning
- * (ilearning-tra-cuu-diem) dán vào hàm loginToLMS() bên dưới. Phần còn lại
- * của file này không cần đụng vào.
  */
 
 const { chromium } = require('playwright');
@@ -73,30 +66,50 @@ function computeDateRange(monthsBack) {
 }
 
 // ---------------------------------------------------------------------------
-// ĐĂNG NHẬP LMS — *** CẦN BẠN THAY BẰNG CODE ĐĂNG NHẬP THẬT ***
-// Copy y nguyên phần login từ scrape.js của repo ilearning-tra-cuu-diem,
-// vì đây là cùng 1 hệ thống LMS, cùng tài khoản (LMS_USERNAME/LMS_PASSWORD).
+// ĐĂNG NHẬP LMS — copy nguyên từ scrape.js của repo ilearning-tra-cuu-diem
+// (cùng 1 LMS, cùng tài khoản, cùng cơ chế login).
 // ---------------------------------------------------------------------------
+const LOGIN_URL = 'https://lms.scotsenglish.edu.vn/login.html';
+
 async function loginToLMS(page) {
-  const username = process.env.LMS_USERNAME;
-  const password = process.env.LMS_PASSWORD;
-  if (!username || !password) {
-    throw new Error('Thiếu LMS_USERNAME / LMS_PASSWORD trong biến môi trường (GitHub Secrets).');
+  const loginId = process.env.LMS_LOGIN_ID;
+  const loginPassword = process.env.LMS_LOGIN_PASSWORD;
+  if (!loginId || !loginPassword) {
+    throw new Error('Thiếu biến môi trường LMS_LOGIN_ID / LMS_LOGIN_PASSWORD (GitHub Secrets).');
   }
 
-  // TODO: thay các dòng dưới bằng đúng URL trang login + selector thật.
-  // Đây chỉ là khung mẫu dựa theo pattern login LMS phổ biến.
-  await page.goto(`${LMS_BASE}/login.aspx`, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT_MS });
-  await page.fill('#txtUsername', username);      // TODO: đổi selector đúng
-  await page.fill('#txtPassword', password);      // TODO: đổi selector đúng
-  await page.click('#btnLogin');                  // TODO: đổi selector đúng
-  await page.waitForLoadState('networkidle', { timeout: PAGE_TIMEOUT_MS });
+  // LMS có thể hiện alert() báo sai tài khoản/mật khẩu — bắt lại để log ra,
+  // tránh Playwright bị treo chờ vô thời hạn vì dialog chưa được xử lý.
+  page.on('dialog', async (dialog) => {
+    console.log(`[DIALOG từ trang] ${dialog.type()}: ${dialog.message()}`);
+    await dialog.dismiss().catch(() => {});
+  });
 
-  // Kiểm tra login thành công (tuỳ chỉnh theo cách nhận biết đăng nhập OK
-  // trên hệ thống thật, ví dụ chờ 1 phần tử chỉ xuất hiện sau khi login).
-  const stillOnLogin = page.url().includes('login');
-  if (stillOnLogin) {
-    throw new Error('Đăng nhập LMS thất bại — kiểm tra lại LMS_USERNAME/LMS_PASSWORD hoặc selector trong loginToLMS().');
+  console.log('== Đăng nhập LMS ==');
+  await page.goto(LOGIN_URL, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#login_id', { state: 'visible' });
+  await page.fill('#login_id', loginId);
+  await page.fill('#login_password', loginPassword);
+  await page.click('#btn_login');
+
+  try {
+    // Đợi rời khỏi trang login (Angular xử lý login() rồi điều hướng đi nơi khác)
+    await page.waitForFunction(() => !location.href.includes('login.html'), { timeout: 60000 });
+    console.log('Đăng nhập OK. URL hiện tại:', page.url());
+  } catch (err) {
+    // Không đăng nhập được -> chụp lại màn hình + HTML tại thời điểm lỗi để debug,
+    // vì không thể xem trực tiếp máy chạy Actions.
+    console.log('== ĐĂNG NHẬP THẤT BẠI — đang lưu ảnh chụp + HTML để debug ==');
+    const debugDir = path.join(REPO_ROOT, 'debug');
+    fs.mkdirSync(debugDir, { recursive: true });
+    await page.screenshot({ path: path.join(debugDir, 'login-failed.png'), fullPage: true }).catch(() => {});
+    fs.writeFileSync(
+      path.join(debugDir, 'login-failed.html'),
+      await page.content().catch(() => '(không lấy được HTML)')
+    );
+    console.log('Đã lưu debug/login-failed.png và debug/login-failed.html');
+    console.log('URL tại thời điểm lỗi:', page.url());
+    throw err;
   }
 }
 
