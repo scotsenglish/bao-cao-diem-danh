@@ -62,9 +62,13 @@ jobs:
           STAFF_ID: ${{ secrets.LMS_STAFF_ID }}
           MONTHS_BACK: ${{ github.event.inputs.months_back || 'all' }}
           DETAIL_MONTHS_BACK: ${{ github.event.inputs.detail_months_back || '2' }}
+          APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
+          APPS_SCRIPT_TOKEN: ${{ secrets.APPS_SCRIPT_TOKEN }}
         run: node scrape.js
 
       - name: Build index.html từ dữ liệu vừa lấy
+        env:
+          APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
         run: python3 build.py
 
       - name: Commit và push data/latest.xlsx + index.html

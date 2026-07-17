@@ -37,6 +37,8 @@ jobs:
         run: pip install openpyxl
 
       - name: Build index.html from latest.xlsx
+        env:
+          APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
         run: python3 build.py
 
       - name: Commit and push index.html
