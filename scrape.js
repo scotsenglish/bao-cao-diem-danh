@@ -330,10 +330,15 @@ async function main() {
   const remaining = branches.filter((b) => !doneIds.has(b.brch_id));
 
   // Mở thêm page cho mỗi "worker" để tăng tốc (cùng context nên vẫn dùng
-  // chung session đăng nhập, không cần login lại).
+  // chung session đăng nhập, không cần login lại). QUAN TRỌNG: mỗi page mới
+  // phải điều hướng vào đúng domain LMS trước, nếu không fetch() với đường
+  // dẫn tương đối ('/data/setup.asmx/...') sẽ lỗi vì page đang ở about:blank
+  // (không có origin hợp lệ để ghép thành URL đầy đủ).
   const pages = [page];
   for (let i = 1; i < CONCURRENCY; i++) {
-    pages.push(await context.newPage());
+    const p = await context.newPage();
+    await p.goto(LMS_BASE, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT_MS });
+    pages.push(p);
   }
 
   let idx = 0;
