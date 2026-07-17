@@ -257,8 +257,14 @@ def main():
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         f.write(html)
 
-    size_kb = os.path.getsize(OUTPUT_FILE) / 1024
-    print(f"Đã tạo {OUTPUT_FILE} ({size_kb:.0f} KB). Xong!")
+    size_mb = os.path.getsize(OUTPUT_FILE) / (1024 * 1024)
+    print(f"Đã tạo {OUTPUT_FILE} ({size_mb:.1f} MB). Xong!")
+    if size_mb > 80:
+        print(
+            f"⚠️  CẢNH BÁO: index.html đang {size_mb:.1f} MB, gần/vượt giới hạn 100MB của GitHub. "
+            f"Nếu bước 'git push' bị lỗi vượt giới hạn dung lượng, hãy giảm DETAIL_MONTHS_BACK "
+            f"khi chạy scrape.js (điều chỉnh trong workflow_dispatch hoặc biến môi trường)."
+        )
 
 
 if __name__ == "__main__":

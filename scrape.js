@@ -40,6 +40,13 @@ const STAFF_ID = process.env.STAFF_ID ? Number(process.env.STAFF_ID) : 9072;
 // MONTHS_BACK: số (vd "3") = chỉ lấy N tháng gần nhất. "all" (mặc định) = lấy
 // TOÀN BỘ lịch sử từ khi công ty bắt đầu dùng LMS tới hôm nay.
 const MONTHS_BACK_RAW = (process.env.MONTHS_BACK || 'all').trim().toLowerCase();
+// Giới hạn RIÊNG cho 2 sheet raw "Number of Student" / "List of Student" (tab
+// "Chi tiết" trên dashboard) — LUÔN chỉ lấy vài tháng gần nhất, KHÔNG theo
+// MONTHS_BACK ở trên, dù MONTHS_BACK="all". Lý do: dữ liệu raw theo từng buổi/
+// từng học viên rất nặng (hàng trăm nghìn dòng nếu để cả năm), embed hết vào
+// index.html sẽ vượt giới hạn 100MB của GitHub. Class Summary Monthly / Student
+// Summary (đã tổng hợp, nhỏ gọn) vẫn lấy đủ theo MONTHS_BACK như bình thường.
+const DETAIL_MONTHS_BACK = process.env.DETAIL_MONTHS_BACK ? Number(process.env.DETAIL_MONTHS_BACK) : 2;
 const CONCURRENCY = process.env.SCRAPE_CONCURRENCY ? Number(process.env.SCRAPE_CONCURRENCY) : 3;
 const PAGE_TIMEOUT_MS = 45_000;
 
@@ -148,8 +155,8 @@ async function fetchBranches(page, staffId) {
   }, staffId);
 }
 
-async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo }) {
-  return page.evaluate(async ({ staffId, branch, dateFrom, dateTo }) => {
+async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo, detailDateFrom }) {
+  return page.evaluate(async ({ staffId, branch, dateFrom, dateTo, detailDateFrom }) => {
     const safeParse = (res) => {
       try { return JSON.parse(res.d.result).Table || []; } catch { return []; }
     };
@@ -160,6 +167,9 @@ async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo }) {
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       return `${mm}/${d.getFullYear()}`;
     };
+    // So sánh chuỗi ngày dạng "YYYY-MM-DD" hoặc "YYYY-MM-DDTHH:mm:ss" đều so
+    // sánh đúng theo thứ tự thời gian (string so sánh từ trái sang phải).
+    const isRecentEnough = (dateText) => !detailDateFrom || String(dateText || '') >= detailDateFrom;
 
     const semRes = await fetch('/data/setup.asmx/CounSemester', {
       method: 'POST',
@@ -190,22 +200,29 @@ async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo }) {
       return safeParse(await res.json());
     };
 
+    // Gọi API với khoảng ngày ĐẦY ĐỦ (dateFrom -> dateTo, có thể là toàn bộ
+    // lịch sử) — cần vậy để Class Summary Monthly / Student Summary tính đúng
+    // tổng số liệu qua các tháng. numberData/listData ở đây có thể rất nhiều dòng.
     const numberData = await callReport('NUMBER');
     const listData = await callReport('LIST');
 
-    // Giữ TOÀN BỘ field gốc mà API trả về (không chỉ vài cột mình đã biết trước),
-    // để không bỏ sót cột nào (ví dụ "Leave Early", "N.Absence" nhìn thấy trên
-    // giao diện LMS nhưng trước đây scrape.js chưa lấy). Branch/Month của mình
-    // luôn ghi đè sau cùng để chắc chắn đúng.
-    const numberRows = numberData.map((r) => ({
-      ...r,
-      Branch: branch.brch_name,
-      Month: formatMonth(r.Date),
-    }));
+    // numberRows / listRawRows: bản RAW cho tab "Chi tiết" trên dashboard —
+    // CHỈ giữ lại các dòng gần đây (>= detailDateFrom) để tránh nhúng hàng
+    // trăm nghìn dòng lịch sử vào index.html gây vượt giới hạn 100MB của GitHub.
+    // sessionRows (dùng để tính tổng) thì KHÔNG lọc, vẫn dùng full listData.
+    const numberRows = numberData
+      .filter((r) => isRecentEnough(r.Date))
+      .map((r) => ({
+        ...r,
+        Branch: branch.brch_name,
+        Month: formatMonth(r.Date),
+      }));
 
     // sessionRows: dùng RIÊNG cho phần tính tổng (buildAggregates) — giữ nguyên
     // các field đã xác nhận đúng tên (Program/Class/ID/Student/Grade/Type),
     // không đổi để không ảnh hưởng số liệu Class Summary Monthly / Student Summary.
+    // Dùng FULL listData (không lọc theo detailDateFrom) để tổng số liệu đúng
+    // cho toàn bộ khoảng thời gian đã chọn (MONTHS_BACK).
     const sessionRows = listData.map((r) => ({
       Branch: branch.brch_name,
       Program: r.Program,
@@ -223,15 +240,18 @@ async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo }) {
     // trên dashboard — hiển thị y hệt bảng "List of Student" trên LMS.
     // LƯU Ý: tên cột chính xác phụ thuộc vào field thật API trả về, mình chưa
     // xác nhận được hết (không có quyền xem DevTools của bạn), nên giữ nguyên
-    // spread toàn bộ để không đoán sai tên field.
-    const listRawRows = listData.map((r) => ({
-      ...r,
-      Branch: branch.brch_name,
-      Month: formatMonth(r.Date),
-    }));
+    // spread toàn bộ để không đoán sai tên field. Cũng lọc theo detailDateFrom
+    // như numberRows, vì đây là phần tốn dung lượng nhiều nhất.
+    const listRawRows = listData
+      .filter((r) => isRecentEnough(r.Date))
+      .map((r) => ({
+        ...r,
+        Branch: branch.brch_name,
+        Month: formatMonth(r.Date),
+      }));
 
     return { numberRows, sessionRows, listRawRows };
-  }, { staffId, branch, dateFrom, dateTo });
+  }, { staffId, branch, dateFrom, dateTo, detailDateFrom });
 }
 
 // ---------------------------------------------------------------------------
@@ -308,7 +328,12 @@ function clearCheckpoint() {
 // ---------------------------------------------------------------------------
 async function main() {
   const { dateFrom, dateTo } = computeDateRange(MONTHS_BACK_RAW);
-  console.log(`📅 Khoảng thời gian lấy dữ liệu: ${dateFrom} → ${dateTo} (MONTHS_BACK=${MONTHS_BACK_RAW})`);
+  console.log(`📅 Khoảng thời gian lấy dữ liệu (tổng hợp): ${dateFrom} → ${dateTo} (MONTHS_BACK=${MONTHS_BACK_RAW})`);
+
+  // Khoảng ngày riêng cho 2 sheet raw (tab "Chi tiết") — luôn chỉ vài tháng gần
+  // nhất, không phụ thuộc MONTHS_BACK ở trên (xem giải thích ở khai báo hằng số).
+  const { dateFrom: detailDateFrom } = computeDateRange(String(DETAIL_MONTHS_BACK));
+  console.log(`📅 Khoảng thời gian cho tab "Chi tiết" (raw): từ ${detailDateFrom} trở đi (DETAIL_MONTHS_BACK=${DETAIL_MONTHS_BACK})`);
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
@@ -348,7 +373,7 @@ async function main() {
       try {
         console.log(`➡️  ${branch.brch_name}`);
         const { numberRows, sessionRows, listRawRows } = await fetchBranchData(p, {
-          staffId: STAFF_ID, branch, dateFrom, dateTo,
+          staffId: STAFF_ID, branch, dateFrom, dateTo, detailDateFrom,
         });
         state.numberRows.push(...numberRows);
         state.sessionRows.push(...sessionRows);
@@ -379,7 +404,15 @@ async function main() {
 
   fs.mkdirSync(path.dirname(OUTPUT_XLSX), { recursive: true });
   XLSX.writeFile(wb, OUTPUT_XLSX);
-  console.log(`💾 Đã ghi ${OUTPUT_XLSX}`);
+  const xlsxSizeMB = fs.statSync(OUTPUT_XLSX).size / (1024 * 1024);
+  console.log(`💾 Đã ghi ${OUTPUT_XLSX} (${xlsxSizeMB.toFixed(1)} MB)`);
+  if (xlsxSizeMB > 80) {
+    console.log(
+      `⚠️  CẢNH BÁO: data/latest.xlsx đang ${xlsxSizeMB.toFixed(1)} MB, gần/vượt giới hạn 100MB của GitHub. ` +
+      `Nếu bước "git push" ở cuối bị lỗi "File ... exceeds GitHub's file size limit", hãy giảm DETAIL_MONTHS_BACK ` +
+      `(hiện đang là ${DETAIL_MONTHS_BACK} tháng) khi chạy lại workflow.`
+    );
+  }
 
   clearCheckpoint(); // job chạy xong trọn vẹn -> xoá checkpoint để lần sau chạy từ đầu
 }
