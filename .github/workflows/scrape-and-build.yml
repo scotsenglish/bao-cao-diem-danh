@@ -14,6 +14,10 @@ on:
         description: '"all" = lấy toàn bộ lịch sử (mặc định). Hoặc nhập số tháng (vd "3") để chỉ lấy gần đây, chạy nhanh hơn.'
         required: false
         default: "all"
+      detail_months_back:
+        description: 'Số tháng gần nhất cho tab "Chi tiết" (Number/List of Student). Mặc định 2. KHÔNG nên để "all" — 2 sheet raw này rất nặng nếu để cả năm.'
+        required: false
+        default: "2"
 
 permissions:
   contents: write
@@ -57,6 +61,7 @@ jobs:
           LMS_LOGIN_PASSWORD: ${{ secrets.LMS_LOGIN_PASSWORD }}
           STAFF_ID: ${{ secrets.LMS_STAFF_ID }}
           MONTHS_BACK: ${{ github.event.inputs.months_back || 'all' }}
+          DETAIL_MONTHS_BACK: ${{ github.event.inputs.detail_months_back || '2' }}
         run: node scrape.js
 
       - name: Build index.html từ dữ liệu vừa lấy
