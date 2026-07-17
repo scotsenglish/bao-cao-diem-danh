@@ -11,10 +11,15 @@
  *      vì fetch() chạy same-origin bên trong trang.
  *   3. Lặp qua từng chi nhánh, gom dữ liệu, ghi checkpoint sau mỗi chi nhánh
  *      để có thể resume nếu job bị gián đoạn giữa chừng.
- *   4. Xuất ra data/latest.xlsx với 3 sheet:
- *        - Number of Student
+ *   4. Xuất ra data/latest.xlsx với 2 sheet TỔNG HỢP (nhỏ gọn, build.py dùng
+ *      để dựng Tổng quan/Theo Lớp/Theo Học viên):
  *        - Student Summary
  *        - Class Summary Monthly
+ *   5. Đẩy dữ liệu CHI TIẾT (Number of Student, List of Student — nặng hơn
+ *      nhiều) lên Google Apps Script/Google Sheets thay vì ghi vào xlsx, để
+ *      không vượt giới hạn 100MB của GitHub dù dữ liệu tích luỹ nhiều năm.
+ *      Tab "Chi tiết" và "Tra cứu Học viên" trên dashboard đọc dữ liệu này
+ *      trực tiếp từ Apps Script (xem APPS_SCRIPT_URL/APPS_SCRIPT_TOKEN).
  *
  * Biến môi trường cần có (GitHub Actions secrets):
  *   LMS_LOGIN_ID, LMS_LOGIN_PASSWORD   — dùng chung với scraper i-Learning điểm số
@@ -191,7 +196,7 @@ async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo, detail
       body: JSON.stringify({ staff: { stf_id: staffId }, setup: { hr_brch_id: branch.brch_id } }),
     });
     const semesters = safeParse(await semRes.json());
-    if (!semesters.length) return { numberRows: [], sessionRows: [], listRawRows: [] };
+    if (!semesters.length) return { numberRows: [], sessionRows: [], listRawRows: [], _debugCounts: { numberDataTotal: 0, listDataTotal: 0 } };
     const bsemId = semesters[0].bsem_id;
 
     const callReport = async (workType) => {
@@ -518,10 +523,13 @@ async function main() {
   const { studentSummaryRows, classSummaryRows } = buildAggregates(state.numberRows, state.sessionRows);
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.numberRows), 'Number of Student');
+  // Chỉ ghi 2 sheet TỔNG HỢP vào xlsx (build.py chỉ cần 2 sheet này để dựng
+  // Tổng quan/Theo Lớp/Theo Học viên). "Number of Student" và "List of Student"
+  // (dữ liệu raw, rất nặng — có thể lên tới hàng trăm nghìn dòng) KHÔNG ghi vào
+  // đây nữa, đã chuyển hẳn sang Google Sheets qua Apps Script (pushDetailToAppsScript
+  // ở trên) để tránh vượt giới hạn 100MB của GitHub.
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(studentSummaryRows), 'Student Summary');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(classSummaryRows), 'Class Summary Monthly');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.listRawRows), 'List of Student');
 
   fs.mkdirSync(path.dirname(OUTPUT_XLSX), { recursive: true });
   XLSX.writeFile(wb, OUTPUT_XLSX);
