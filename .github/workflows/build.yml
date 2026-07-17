@@ -47,4 +47,24 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add index.html
           git diff --staged --quiet && echo "Không có thay đổi để commit" || git commit -m "Auto-build dashboard from data/latest.xlsx [skip ci]"
-          git push
+
+          for i in 1 2 3 4 5; do
+            if git push; then
+              echo "Push thành công."
+              break
+            fi
+            echo "Push bị từ chối (lần $i) — đang pull --rebase rồi thử lại..."
+            git fetch origin main
+            if ! git rebase origin/main; then
+              echo "Rebase bị xung đột thật sự — dùng phương án an toàn: giữ nguyên" \
+                   "index.html vừa build (file này tự sinh ra, không cần giữ lịch sử chi tiết)."
+              git rebase --abort
+              git reset --hard origin/main
+              git add index.html
+              git diff --staged --quiet && echo "Không có gì khác để commit" || git commit -m "Auto-build dashboard from data/latest.xlsx [skip ci]"
+            fi
+            if [ "$i" -eq 5 ]; then
+              echo "Đã thử 5 lần vẫn không push được — dừng lại, cần kiểm tra thủ công."
+              exit 1
+            fi
+          done

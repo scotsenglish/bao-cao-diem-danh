@@ -77,7 +77,31 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/latest.xlsx index.html
           git diff --staged --quiet && echo "Không có thay đổi để commit" || git commit -m "Auto scrape + build attendance dashboard [skip ci]"
-          git push
+
+          # Nếu remote đã có commit mới hơn (ví dụ bạn vừa upload file tay cùng
+          # lúc) thì push thẳng sẽ bị từ chối. Tự động pull --rebase rồi thử
+          # lại vài lần thay vì để lỗi bắt bạn phải chạy lại tay.
+          for i in 1 2 3 4 5; do
+            if git push; then
+              echo "Push thành công."
+              break
+            fi
+            echo "Push bị từ chối (lần $i) — đang pull --rebase rồi thử lại..."
+            git fetch origin main
+            if ! git rebase origin/main; then
+              echo "Rebase bị xung đột thật sự — dùng phương án an toàn: giữ nguyên" \
+                   "data/latest.xlsx + index.html vừa build (2 file này tự sinh ra," \
+                   "không cần giữ lịch sử chi tiết)."
+              git rebase --abort
+              git reset --hard origin/main
+              git add data/latest.xlsx index.html
+              git diff --staged --quiet && echo "Không có gì khác để commit" || git commit -m "Auto scrape + build attendance dashboard [skip ci]"
+            fi
+            if [ "$i" -eq 5 ]; then
+              echo "Đã thử 5 lần vẫn không push được — dừng lại, cần kiểm tra thủ công."
+              exit 1
+            fi
+          done
 
       - name: Upload checkpoint nếu job bị lỗi giữa chừng (để debug)
         if: failure()
