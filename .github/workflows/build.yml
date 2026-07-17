@@ -1,7 +1,14 @@
-name: Build Attendance Dashboard
+name: Build Dashboard (manual override / code edits)
 
-# Tự động chạy mỗi khi có push làm thay đổi data/latest.xlsx, template.html, hoặc build.py
-# Cũng có thể chạy tay từ tab "Actions" trên GitHub (nút "Run workflow")
+# Workflow NÀY chỉ dùng cho 2 trường hợp:
+#   1. Bạn tự tay đè file Excel vào data/latest.xlsx (ví dụ scraper tự động
+#      bị lỗi, bạn chạy tay script export cũ rồi upload thay thế)
+#   2. Bạn sửa template.html hoặc build.py và muốn build lại ngay
+# Việc lấy dữ liệu tự động theo lịch nằm ở workflow riêng:
+# .github/workflows/scrape-and-build.yml (chạy 06:00/12:00/18:00 hàng ngày)
+#
+# Lưu ý: các commit từ scrape-and-build.yml có "[skip ci]" trong message nên
+# sẽ KHÔNG kích hoạt lại workflow này, tránh chạy 2 lần thừa.
 on:
   push:
     branches: [main]
