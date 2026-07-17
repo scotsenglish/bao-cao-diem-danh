@@ -138,6 +138,7 @@
     <button class="tab-btn active" data-tab="overview">📈 Tổng quan</button>
     <button class="tab-btn" data-tab="classes">📚 Theo Lớp</button>
     <button class="tab-btn" data-tab="students">🧑‍🎓 Theo Học viên</button>
+    <button class="tab-btn" data-tab="detail">🗂️ Chi tiết</button>
   </div>
 
   <!-- ============ TAB: OVERVIEW ============ -->
@@ -246,6 +247,59 @@
     </section>
   </div>
 
+  <!-- ============ TAB: CHI TIẾT (dữ liệu thô, giống LMS) ============ -->
+  <div id="tab-detail" class="hidden">
+    <div class="data-info">Bảng dữ liệu gốc lấy trực tiếp từ LMS (giống 2 tab "Number of Student" / "List of Student" trên LMS), chưa qua tổng hợp.</div>
+    <div class="tabs" style="margin-top:0;">
+      <button class="tab-btn active" data-subtab="number-raw">Number of Student</button>
+      <button class="tab-btn" data-subtab="list-raw">List of Student</button>
+    </div>
+
+    <div id="subtab-number-raw">
+      <section class="table-section">
+        <h3>Number of Student (dữ liệu gốc, theo từng lớp/ngày)</h3>
+        <div class="table-controls">
+          <input type="text" class="search-box" id="nr-search" placeholder="Tìm theo Program, Class, Date...">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="row-count" id="nr-row-count">0 dòng</div>
+            <button type="button" class="export-btn" id="nr-export">⬇ Xuất Excel</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" id="nr-table">
+            <thead><tr id="nr-table-head"></tr></thead>
+            <tbody id="nr-table-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <button id="nr-prev">‹ Trước</button><span id="nr-page-info">1/1</span><button id="nr-next">Sau ›</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="subtab-list-raw" class="hidden">
+      <section class="table-section">
+        <h3>List of Student (dữ liệu gốc, theo từng học viên/buổi)</h3>
+        <div class="table-controls">
+          <input type="text" class="search-box" id="lr-search" placeholder="Tìm theo tên, mã HV, lớp...">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="row-count" id="lr-row-count">0 dòng</div>
+            <button type="button" class="export-btn" id="lr-export">⬇ Xuất Excel</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" id="lr-table">
+            <thead><tr id="lr-table-head"></tr></thead>
+            <tbody id="lr-table-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <button id="lr-prev">‹ Trước</button><span id="lr-page-info">1/1</span><button id="lr-next">Sau ›</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
   <footer class="dashboard-footer">
     Cập nhật lần đầu: <span id="data-date"></span> &nbsp;•&nbsp; Dùng nút "Tải file export mới" mỗi tháng để cập nhật số liệu
   </footer>
@@ -254,6 +308,11 @@
 <script>
 const CLASS_DATA = __CLASS_DATA__;
 const STUDENT_DATA = __STUDENT_DATA__;
+// Dữ liệu thô (chưa tổng hợp), giống hệt 2 tab trên LMS — dùng cho tab "Chi tiết".
+// Tên cột phụ thuộc đúng field API trả về, có thể rỗng [] nếu build.py chưa
+// tìm thấy sheet tương ứng trong file Excel.
+const NUMBER_OF_STUDENT_RAW = __NUMBER_OF_STUDENT_RAW__;
+const LIST_OF_STUDENT_RAW = __LIST_OF_STUDENT_RAW__;
 
 // Chi nhánh -> Vùng. Nếu mở chi nhánh mới, thêm 1 dòng vào đây theo đúng định dạng.
 const REGION_MAP = __REGION_MAP__;
@@ -390,13 +449,131 @@ class MultiSelect{
 }
 MultiSelect.initOutsideClickHandler();
 
+// RawTableView: bảng tổng quát cho dữ liệu "thô" (Number of Student / List of
+// Student) — tự dò cột từ chính dữ liệu, không cố định trước danh sách cột,
+// vì tên field thật từ API LMS có thể khác nhau giữa các lần cập nhật.
+class RawTableView{
+  constructor(prefix, data, sheetName){
+    this.prefix = prefix; // vd 'nr' hoặc 'lr' — dùng làm tiền tố id phần tử DOM
+    this.data = data || [];
+    this.sheetName = sheetName || 'Data';
+    this.columns = this.data.length ? Object.keys(this.data[0]).filter(k => k !== 'region') : [];
+    this.searchTerms = [];
+    this.sortKey = null;
+    this.sortDir = 'asc';
+    this.page = 0;
+    this.pageSize = 20;
+    this.renderHead();
+    this.setupEvents();
+    this.render();
+  }
+
+  el(id){ return document.getElementById(`${this.prefix}-${id}`); }
+
+  renderHead(){
+    const head = this.el('table-head');
+    if (!this.columns.length){
+      head.innerHTML = '<th>Không có dữ liệu</th>';
+      return;
+    }
+    head.innerHTML = this.columns.map(c => `<th data-col="${c}">${c}</th>`).join('');
+    head.querySelectorAll('th').forEach(th => th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (this.sortKey === col) this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+      else { this.sortKey = col; this.sortDir = 'asc'; }
+      this.render();
+    }));
+  }
+
+  setupEvents(){
+    const search = this.el('search');
+    if (search) search.addEventListener('input', () => {
+      this.searchTerms = search.value.toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+      this.page = 0;
+      this.render();
+    });
+    const exportBtn = this.el('export');
+    if (exportBtn) exportBtn.addEventListener('click', () => this.exportExcel());
+    const prevBtn = this.el('prev');
+    const nextBtn = this.el('next');
+    if (prevBtn) prevBtn.addEventListener('click', () => { if (this.page > 0){ this.page--; this.render(); } });
+    if (nextBtn) nextBtn.addEventListener('click', () => {
+      const maxPage = Math.max(0, Math.ceil(this.getFilteredSorted().length / this.pageSize) - 1);
+      if (this.page < maxPage){ this.page++; this.render(); }
+    });
+  }
+
+  getFilteredSorted(){
+    let rows = this.data;
+    if (this.searchTerms.length){
+      rows = rows.filter(r => {
+        const hay = this.columns.map(c => String(r[c] ?? '')).join(' ').toLowerCase();
+        return this.searchTerms.some(t => hay.includes(t));
+      });
+    }
+    if (this.sortKey){
+      const mult = this.sortDir === 'asc' ? 1 : -1;
+      rows = [...rows].sort((a, b) => {
+        let va = a[this.sortKey], vb = b[this.sortKey];
+        if (va === null || va === undefined) va = '';
+        if (vb === null || vb === undefined) vb = '';
+        if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * mult;
+        return String(va).localeCompare(String(vb), 'vi') * mult;
+      });
+    }
+    return rows;
+  }
+
+  render(){
+    const data = this.getFilteredSorted();
+    const rowCountEl = this.el('row-count');
+    if (rowCountEl) rowCountEl.textContent = `${data.length.toLocaleString('vi-VN')} dòng`;
+
+    const maxPage = Math.max(0, Math.ceil(data.length / this.pageSize) - 1);
+    if (this.page > maxPage) this.page = maxPage;
+    const page = data.slice(this.page * this.pageSize, this.page * this.pageSize + this.pageSize);
+
+    const body = this.el('table-body');
+    if (!this.columns.length){
+      body.innerHTML = `<tr><td style="text-align:center;color:var(--text-secondary);padding:16px;">Chưa có dữ liệu — có thể do file Excel chưa có sheet "${this.sheetName}", hoặc scraper chưa chạy lần nào.</td></tr>`;
+    } else {
+      body.innerHTML = page.map(r => `<tr>${this.columns.map(c => `<td>${r[c] ?? ''}</td>`).join('')}</tr>`).join('');
+    }
+
+    const pageInfo = this.el('page-info');
+    if (pageInfo) pageInfo.textContent = `${this.page + 1}/${maxPage + 1}`;
+    const prevBtn = this.el('prev');
+    const nextBtn = this.el('next');
+    if (prevBtn) prevBtn.disabled = this.page === 0;
+    if (nextBtn) nextBtn.disabled = this.page >= maxPage;
+  }
+
+  exportExcel(){
+    const data = this.getFilteredSorted();
+    if (!data.length){ alert('Không có dữ liệu để xuất (kiểm tra lại tìm kiếm).'); return; }
+    const ws = XLSX.utils.json_to_sheet(data.map(r => {
+      const row = {};
+      this.columns.forEach(c => { row[c] = r[c]; });
+      return row;
+    }));
+    ws['!cols'] = this.columns.map(c => ({ wch: Math.max(String(c).length, 12) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, this.sheetName.slice(0, 31));
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    XLSX.writeFile(wb, `${this.sheetName.replace(/\s+/g, '_')}_${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}.xlsx`);
+  }
+}
+
 class Dashboard{
   // Các chiều lọc dùng chung cho lớp (Class Summary Monthly). Học viên dùng tất cả trừ 'month' (không có dữ liệu theo tháng).
   static FILTER_DIMS = ['region','branch','program','class_name','month'];
   static STUDENT_FILTER_DIMS = ['region','branch','program','class_name'];
 
-  constructor(classData, studentData){
+  constructor(classData, studentData, numberRawData, listRawData){
     this.loadNewData(classData, studentData, 'dữ liệu mẫu ban đầu');
+    this.numberRawData = numberRawData || [];
+    this.listRawData = listRawData || [];
     this.activeTab = 'overview';
     this.cSort = { key:'att_rate', dir:'asc' }; this.cPage = 0; this.cPageSize = 15; this.cSearch = [];
     this.sSort = { key:'att_rate', dir:'asc' }; this.sPage = 0; this.sPageSize = 15; this.sSearch = [];
@@ -410,6 +587,8 @@ class Dashboard{
     this.setupFilters();
     this.setupTableEvents();
     this.setupUpload();
+    this.numberRawView = new RawTableView('nr', this.numberRawData, 'Number of Student');
+    this.listRawView = new RawTableView('lr', this.listRawData, 'List of Student');
     this.render();
   }
 
@@ -424,15 +603,26 @@ class Dashboard{
   }
 
   setupTabs(){
-    document.querySelectorAll('.tab-btn').forEach(btn => {
+    document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('.tab-btn[data-tab]').forEach(b=>b.classList.remove('active'));
         btn.classList.add('active');
         this.activeTab = btn.dataset.tab;
         document.getElementById('tab-overview').classList.toggle('hidden', this.activeTab !== 'overview');
         document.getElementById('tab-classes').classList.toggle('hidden', this.activeTab !== 'classes');
         document.getElementById('tab-students').classList.toggle('hidden', this.activeTab !== 'students');
+        document.getElementById('tab-detail').classList.toggle('hidden', this.activeTab !== 'detail');
         this.render();
+      });
+    });
+
+    document.querySelectorAll('.tab-btn[data-subtab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn[data-subtab]').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        const sub = btn.dataset.subtab;
+        document.getElementById('subtab-number-raw').classList.toggle('hidden', sub !== 'number-raw');
+        document.getElementById('subtab-list-raw').classList.toggle('hidden', sub !== 'list-raw');
       });
     });
   }
@@ -858,7 +1048,7 @@ class Dashboard{
   }
 }
 
-const dashboard = new Dashboard(CLASS_DATA, STUDENT_DATA);
+const dashboard = new Dashboard(CLASS_DATA, STUDENT_DATA, NUMBER_OF_STUDENT_RAW, LIST_OF_STUDENT_RAW);
 </script>
 </body>
 </html>

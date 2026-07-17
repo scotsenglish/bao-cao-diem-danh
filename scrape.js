@@ -20,9 +20,10 @@
  *   LMS_LOGIN_ID, LMS_LOGIN_PASSWORD   — dùng chung với scraper i-Learning điểm số
  *
  * Biến có thể chỉnh:
- *   MONTHS_BACK   — số tháng lùi về (mặc định 3: tháng hiện tại + 2 tháng trước).
- *                   Tăng số này nếu muốn dashboard tổng hợp được xa hơn về quá khứ,
- *                   nhưng lưu ý index.html sẽ phình to hơn tương ứng.
+ *   MONTHS_BACK   — "all" (mặc định) = lấy TOÀN BỘ lịch sử từ khi công ty bắt
+ *                   đầu dùng LMS. Hoặc 1 số (vd "3") = chỉ lấy N tháng gần nhất
+ *                   (tháng hiện tại + (N-1) tháng trước) — nhanh hơn, dùng khi
+ *                   không cần cập nhật lại toàn bộ lịch sử mỗi lần chạy.
  *   STAFF_ID      — id nhân viên dùng để gọi API (mặc định 9072, lấy từ script
  *                   export tay của bạn). Đổi qua biến môi trường STAFF_ID nếu cần.
  */
@@ -36,9 +37,17 @@ const path = require('path');
 // CẤU HÌNH
 // ---------------------------------------------------------------------------
 const STAFF_ID = process.env.STAFF_ID ? Number(process.env.STAFF_ID) : 9072;
-const MONTHS_BACK = process.env.MONTHS_BACK ? Number(process.env.MONTHS_BACK) : 3;
+// MONTHS_BACK: số (vd "3") = chỉ lấy N tháng gần nhất. "all" (mặc định) = lấy
+// TOÀN BỘ lịch sử từ khi công ty bắt đầu dùng LMS tới hôm nay.
+const MONTHS_BACK_RAW = (process.env.MONTHS_BACK || 'all').trim().toLowerCase();
 const CONCURRENCY = process.env.SCRAPE_CONCURRENCY ? Number(process.env.SCRAPE_CONCURRENCY) : 3;
 const PAGE_TIMEOUT_MS = 45_000;
+
+// Mốc ngày an toàn để lấy "toàn bộ": đặt sớm hơn nhiều so với ngày công ty
+// thực tế bắt đầu dùng i-Learning LMS, để chắc chắn không bỏ sót dữ liệu nào.
+// LMS sẽ tự trả về rỗng cho khoảng thời gian trước khi có dữ liệu thật, nên
+// đặt sớm hơn thực tế không gây hại gì, chỉ là dư ra không ảnh hưởng kết quả.
+const ALL_HISTORY_ANCHOR = '2025-01-01';
 
 const REPO_ROOT = path.join(__dirname);
 const OUTPUT_XLSX = path.join(REPO_ROOT, 'data', 'latest.xlsx');
@@ -47,20 +56,27 @@ const CHECKPOINT_FILE = path.join(REPO_ROOT, 'data', '.attendance_checkpoint.jso
 const LMS_BASE = 'https://lms.scotsenglish.edu.vn';
 
 // ---------------------------------------------------------------------------
-// TÍNH KHOẢNG THỜI GIAN (rolling window MONTHS_BACK tháng gần nhất)
+// TÍNH KHOẢNG THỜI GIAN
+//   - MONTHS_BACK = "all": từ ALL_HISTORY_ANCHOR đến hôm nay (toàn bộ lịch sử)
+//   - MONTHS_BACK = số N: rolling window N tháng gần nhất (tháng hiện tại + (N-1) tháng trước)
 // ---------------------------------------------------------------------------
-function computeDateRange(monthsBack) {
+function computeDateRange(monthsBackRaw) {
   const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
   const endY = now.getFullYear();
-  const endM = now.getMonth() + 1; // 1-12, tháng hiện tại
+  const endM = now.getMonth() + 1;
+  const lastDayOfEndMonth = new Date(endY, endM, 0).getDate();
+  const dateTo = `${endY}-${pad(endM)}-${pad(lastDayOfEndMonth)}`;
+
+  if (monthsBackRaw === 'all') {
+    return { dateFrom: ALL_HISTORY_ANCHOR, dateTo };
+  }
+
+  const monthsBack = Number(monthsBackRaw);
   const startDate = new Date(endY, endM - monthsBack, 1); // lùi (monthsBack-1) tháng trước tháng hiện tại
   const startY = startDate.getFullYear();
   const startM = startDate.getMonth() + 1;
-
-  const pad = (n) => String(n).padStart(2, '0');
   const dateFrom = `${startY}-${pad(startM)}-01`;
-  const lastDayOfEndMonth = new Date(endY, endM, 0).getDate();
-  const dateTo = `${endY}-${pad(endM)}-${pad(lastDayOfEndMonth)}`;
 
   return { dateFrom, dateTo };
 }
@@ -151,7 +167,7 @@ async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo }) {
       body: JSON.stringify({ staff: { stf_id: staffId }, setup: { hr_brch_id: branch.brch_id } }),
     });
     const semesters = safeParse(await semRes.json());
-    if (!semesters.length) return { numberRows: [], sessionRows: [] };
+    if (!semesters.length) return { numberRows: [], sessionRows: [], listRawRows: [] };
     const bsemId = semesters[0].bsem_id;
 
     const callReport = async (workType) => {
@@ -177,18 +193,19 @@ async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo }) {
     const numberData = await callReport('NUMBER');
     const listData = await callReport('LIST');
 
+    // Giữ TOÀN BỘ field gốc mà API trả về (không chỉ vài cột mình đã biết trước),
+    // để không bỏ sót cột nào (ví dụ "Leave Early", "N.Absence" nhìn thấy trên
+    // giao diện LMS nhưng trước đây scrape.js chưa lấy). Branch/Month của mình
+    // luôn ghi đè sau cùng để chắc chắn đúng.
     const numberRows = numberData.map((r) => ({
+      ...r,
       Branch: branch.brch_name,
-      Program: r.Program,
-      Class: r.Class,
-      Date: r.Date,
-      Attendance: r.Attendance,
-      Absence: r.Absence,
-      Late: r.Late,
-      Total: r.Total,
       Month: formatMonth(r.Date),
     }));
 
+    // sessionRows: dùng RIÊNG cho phần tính tổng (buildAggregates) — giữ nguyên
+    // các field đã xác nhận đúng tên (Program/Class/ID/Student/Grade/Type),
+    // không đổi để không ảnh hưởng số liệu Class Summary Monthly / Student Summary.
     const sessionRows = listData.map((r) => ({
       Branch: branch.brch_name,
       Program: r.Program,
@@ -201,7 +218,19 @@ async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo }) {
       Type: r.Type,
     }));
 
-    return { numberRows, sessionRows };
+    // listRawRows: bản RAW đầy đủ của "List of Student" (No, Assigned Staff, Day,
+    // Start Time, School, Instructor, Room, Reason, ...) để phục vụ tab "Chi tiết"
+    // trên dashboard — hiển thị y hệt bảng "List of Student" trên LMS.
+    // LƯU Ý: tên cột chính xác phụ thuộc vào field thật API trả về, mình chưa
+    // xác nhận được hết (không có quyền xem DevTools của bạn), nên giữ nguyên
+    // spread toàn bộ để không đoán sai tên field.
+    const listRawRows = listData.map((r) => ({
+      ...r,
+      Branch: branch.brch_name,
+      Month: formatMonth(r.Date),
+    }));
+
+    return { numberRows, sessionRows, listRawRows };
   }, { staffId, branch, dateFrom, dateTo });
 }
 
@@ -263,7 +292,7 @@ function loadCheckpoint() {
   try {
     return JSON.parse(fs.readFileSync(CHECKPOINT_FILE, 'utf-8'));
   } catch {
-    return { doneBranchIds: [], numberRows: [], sessionRows: [] };
+    return { doneBranchIds: [], numberRows: [], sessionRows: [], listRawRows: [] };
   }
 }
 function saveCheckpoint(state) {
@@ -278,8 +307,8 @@ function clearCheckpoint() {
 // MAIN
 // ---------------------------------------------------------------------------
 async function main() {
-  const { dateFrom, dateTo } = computeDateRange(MONTHS_BACK);
-  console.log(`📅 Khoảng thời gian lấy dữ liệu: ${dateFrom} → ${dateTo} (MONTHS_BACK=${MONTHS_BACK})`);
+  const { dateFrom, dateTo } = computeDateRange(MONTHS_BACK_RAW);
+  console.log(`📅 Khoảng thời gian lấy dữ liệu: ${dateFrom} → ${dateTo} (MONTHS_BACK=${MONTHS_BACK_RAW})`);
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
@@ -313,11 +342,12 @@ async function main() {
       const branch = remaining[idx++];
       try {
         console.log(`➡️  ${branch.brch_name}`);
-        const { numberRows, sessionRows } = await fetchBranchData(p, {
+        const { numberRows, sessionRows, listRawRows } = await fetchBranchData(p, {
           staffId: STAFF_ID, branch, dateFrom, dateTo,
         });
         state.numberRows.push(...numberRows);
         state.sessionRows.push(...sessionRows);
+        state.listRawRows.push(...listRawRows);
         state.doneBranchIds.push(branch.brch_id);
         saveCheckpoint(state); // checkpoint sau MỖI chi nhánh
         console.log(`   ✔️  ${branch.brch_name}: N=${numberRows.length}, session=${sessionRows.length}`);
@@ -332,7 +362,7 @@ async function main() {
 
   await browser.close();
 
-  console.log(`🎉 Xong. Tổng: ${state.numberRows.length} dòng Number, ${state.sessionRows.length} lượt điểm danh (dùng để tính tổng, không xuất ra sheet riêng).`);
+  console.log(`🎉 Xong. Tổng: ${state.numberRows.length} dòng Number, ${state.sessionRows.length} lượt điểm danh, ${state.listRawRows.length} dòng List of Student (raw).`);
 
   const { studentSummaryRows, classSummaryRows } = buildAggregates(state.numberRows, state.sessionRows);
 
@@ -340,6 +370,7 @@ async function main() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.numberRows), 'Number of Student');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(studentSummaryRows), 'Student Summary');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(classSummaryRows), 'Class Summary Monthly');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.listRawRows), 'List of Student');
 
   fs.mkdirSync(path.dirname(OUTPUT_XLSX), { recursive: true });
   XLSX.writeFile(wb, OUTPUT_XLSX);
