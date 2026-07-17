@@ -62,6 +62,12 @@ const CHECKPOINT_FILE = path.join(REPO_ROOT, 'data', '.attendance_checkpoint.jso
 
 const LMS_BASE = 'https://lms.scotsenglish.edu.vn';
 
+// Backend Google Apps Script (tab "Chi tiết" + "Tra cứu Học viên" trên dashboard
+// đọc dữ liệu từ đây, không nhúng trực tiếp vào index.html nữa — tránh vượt
+// giới hạn 100MB của GitHub khi dữ liệu tích luỹ lâu dài).
+const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL || '';
+const APPS_SCRIPT_TOKEN = process.env.APPS_SCRIPT_TOKEN || '';
+
 // ---------------------------------------------------------------------------
 // TÍNH KHOẢNG THỜI GIAN
 //   - MONTHS_BACK = "all": từ ALL_HISTORY_ANCHOR đến hôm nay (toàn bộ lịch sử)
@@ -167,9 +173,17 @@ async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo, detail
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       return `${mm}/${d.getFullYear()}`;
     };
-    // So sánh chuỗi ngày dạng "YYYY-MM-DD" hoặc "YYYY-MM-DDTHH:mm:ss" đều so
-    // sánh đúng theo thứ tự thời gian (string so sánh từ trái sang phải).
-    const isRecentEnough = (dateText) => !detailDateFrom || String(dateText || '') >= detailDateFrom;
+    // Dùng Date object để so sánh (không dùng so sánh chuỗi) — an toàn hơn vì
+    // không phụ thuộc API trả về đúng định dạng "YYYY-MM-DD" hay không (có thể
+    // là "YYYY-MM-DDTHH:mm:ss" hoặc định dạng khác). Nếu không parse được ngày,
+    // coi như "gần đây" (giữ lại) để tránh lỡ tay lọc mất dữ liệu.
+    const detailCutoffTime = detailDateFrom ? new Date(`${detailDateFrom}T00:00:00`).getTime() : null;
+    const isRecentEnough = (dateText) => {
+      if (!detailCutoffTime) return true;
+      const t = new Date(dateText).getTime();
+      if (isNaN(t)) return true;
+      return t >= detailCutoffTime;
+    };
 
     const semRes = await fetch('/data/setup.asmx/CounSemester', {
       method: 'POST',
@@ -250,7 +264,10 @@ async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo, detail
         Month: formatMonth(r.Date),
       }));
 
-    return { numberRows, sessionRows, listRawRows };
+    return {
+      numberRows, sessionRows, listRawRows,
+      _debugCounts: { numberDataTotal: numberData.length, listDataTotal: listData.length },
+    };
   }, { staffId, branch, dateFrom, dateTo, detailDateFrom });
 }
 
@@ -324,6 +341,107 @@ function clearCheckpoint() {
 }
 
 // ---------------------------------------------------------------------------
+// ĐẨY DỮ LIỆU CHI TIẾT LÊN GOOGLE APPS SCRIPT (thay cho việc nhúng vào HTML)
+// ---------------------------------------------------------------------------
+function chunkArray(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+function yearOfMonthStr_(monthStr) {
+  const parts = String(monthStr || '').split('/');
+  return parts.length === 2 ? parts[1] : null;
+}
+
+async function appsScriptPost(action, payload) {
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ action, token: APPS_SCRIPT_TOKEN }, payload)),
+    redirect: 'follow',
+  });
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Phản hồi từ Apps Script không phải JSON hợp lệ (có thể do sai URL/token, hoặc deploy chưa đúng): ${text.slice(0, 300)}`);
+  }
+}
+
+// Gộp rows theo (year, month) rồi gửi lên Apps Script — chia nhỏ theo lô để
+// tránh 1 request quá lớn (Apps Script có giới hạn kích thước request).
+async function pushMonthlySheet(sheetName, rows) {
+  if (!rows.length) return;
+  const byYear = {};
+  rows.forEach((r) => {
+    const year = yearOfMonthStr_(r.Month);
+    if (!year) return;
+    (byYear[year] = byYear[year] || []).push(r);
+  });
+
+  for (const year of Object.keys(byYear)) {
+    const yearRows = byYear[year];
+    const monthsInYear = Array.from(new Set(yearRows.map((r) => r.Month)));
+    const chunks = chunkArray(yearRows, 3000);
+    console.log(`   📤 Đẩy ${sheetName} năm ${year}: ${yearRows.length} dòng, ${monthsInYear.length} tháng, chia ${chunks.length} lô...`);
+    for (let i = 0; i < chunks.length; i++) {
+      // Chỉ báo "months" (để Apps Script xoá dữ liệu cũ trước khi ghi) ở LÔ ĐẦU
+      // TIÊN của mỗi năm — các lô sau chỉ nối thêm (không xoá lại, tránh xoá
+      // mất dữ liệu vừa ghi ở lô trước đó trong CÙNG 1 lần chạy này).
+      const months = i === 0 ? monthsInYear : [];
+      const result = await appsScriptPost('upsertMonths', { year, sheetName, months, rows: chunks[i] });
+      if (result && result.error) throw new Error(`Apps Script lỗi (${sheetName}, năm ${year}, lô ${i + 1}/${chunks.length}): ${result.error}`);
+    }
+  }
+}
+
+// Xây danh sách "chỉ mục học viên" (student_id + lớp -> những năm có dữ liệu)
+// từ listRawRows, để tab Tra cứu Học viên biết cần mở năm nào khi tìm kiếm.
+function buildStudentIndexEntries(listRawRows) {
+  const seen = new Set();
+  const entries = [];
+  listRawRows.forEach((r) => {
+    const year = yearOfMonthStr_(r.Month);
+    if (!year || !r.ID || !r.Class) return;
+    const key = `${r.ID}||${r.Class}||${year}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    entries.push({
+      student_id: r.ID,
+      name: r.Student || '',
+      branch: r.Branch,
+      program: r.Program,
+      class_name: r.Class,
+      year,
+    });
+  });
+  return entries;
+}
+
+async function pushStudentIndex(entries) {
+  if (!entries.length) return;
+  const chunks = chunkArray(entries, 3000);
+  console.log(`   📤 Đẩy StudentIndex: ${entries.length} mục, chia ${chunks.length} lô...`);
+  for (let i = 0; i < chunks.length; i++) {
+    const result = await appsScriptPost('upsertStudentIndex', { entries: chunks[i] });
+    if (result && result.error) throw new Error(`Apps Script lỗi (StudentIndex, lô ${i + 1}/${chunks.length}): ${result.error}`);
+  }
+}
+
+async function pushDetailToAppsScript(state) {
+  if (!APPS_SCRIPT_URL || !APPS_SCRIPT_TOKEN) {
+    console.log('⚠️  Chưa cấu hình APPS_SCRIPT_URL / APPS_SCRIPT_TOKEN — bỏ qua bước đẩy dữ liệu tab "Chi tiết"/"Tra cứu Học viên" (các tab này sẽ không có dữ liệu mới).');
+    return;
+  }
+  console.log('== Đang đẩy dữ liệu chi tiết lên Google Apps Script ==');
+  await pushMonthlySheet('NumberOfStudent', state.numberRows);
+  await pushMonthlySheet('ListOfStudent', state.listRawRows);
+  await pushStudentIndex(buildStudentIndexEntries(state.listRawRows));
+  console.log('== Đẩy dữ liệu chi tiết xong ==');
+}
+
+// ---------------------------------------------------------------------------
 // MAIN
 // ---------------------------------------------------------------------------
 async function main() {
@@ -372,7 +490,7 @@ async function main() {
       const branch = remaining[idx++];
       try {
         console.log(`➡️  ${branch.brch_name}`);
-        const { numberRows, sessionRows, listRawRows } = await fetchBranchData(p, {
+        const { numberRows, sessionRows, listRawRows, _debugCounts } = await fetchBranchData(p, {
           staffId: STAFF_ID, branch, dateFrom, dateTo, detailDateFrom,
         });
         state.numberRows.push(...numberRows);
@@ -380,7 +498,10 @@ async function main() {
         state.listRawRows.push(...listRawRows);
         state.doneBranchIds.push(branch.brch_id);
         saveCheckpoint(state); // checkpoint sau MỖI chi nhánh
-        console.log(`   ✔️  ${branch.brch_name}: N=${numberRows.length}, session=${sessionRows.length}`);
+        console.log(
+          `   ✔️  ${branch.brch_name}: number raw ${numberRows.length}/${_debugCounts.numberDataTotal} ` +
+          `(sau lọc/tổng), list raw ${listRawRows.length}/${_debugCounts.listDataTotal}, session (không lọc)=${sessionRows.length}`
+        );
       } catch (err) {
         console.error(`   ❌ Lỗi ở chi nhánh ${branch.brch_name}:`, err.message);
         // Không throw — chi nhánh lỗi sẽ được thử lại ở lần chạy job kế tiếp
@@ -412,6 +533,13 @@ async function main() {
       `Nếu bước "git push" ở cuối bị lỗi "File ... exceeds GitHub's file size limit", hãy giảm DETAIL_MONTHS_BACK ` +
       `(hiện đang là ${DETAIL_MONTHS_BACK} tháng) khi chạy lại workflow.`
     );
+  }
+
+  try {
+    await pushDetailToAppsScript(state);
+  } catch (err) {
+    console.log(`⚠️  Đẩy dữ liệu lên Apps Script thất bại: ${err.message}`);
+    console.log('   (data/latest.xlsx vẫn được ghi/commit bình thường — tab "Chi tiết"/"Tra cứu Học viên" sẽ tạm chưa cập nhật cho tới lần chạy sau).');
   }
 
   clearCheckpoint(); // job chạy xong trọn vẹn -> xoá checkpoint để lần sau chạy từ đầu

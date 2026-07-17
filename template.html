@@ -139,6 +139,7 @@
     <button class="tab-btn" data-tab="classes">📚 Theo Lớp</button>
     <button class="tab-btn" data-tab="students">🧑‍🎓 Theo Học viên</button>
     <button class="tab-btn" data-tab="detail">🗂️ Chi tiết</button>
+    <button class="tab-btn" data-tab="lookup">🔍 Tra cứu Học viên</button>
   </div>
 
   <!-- ============ TAB: OVERVIEW ============ -->
@@ -249,7 +250,7 @@
 
   <!-- ============ TAB: CHI TIẾT (dữ liệu thô, giống LMS) ============ -->
   <div id="tab-detail" class="hidden">
-    <div class="data-info">Bảng dữ liệu gốc lấy trực tiếp từ LMS (giống 2 tab "Number of Student" / "List of Student" trên LMS), chưa qua tổng hợp.</div>
+    <div class="data-info">Bảng dữ liệu gốc lấy trực tiếp từ LMS (giống 2 tab "Number of Student" / "List of Student" trên LMS), chưa qua tổng hợp. Dữ liệu tải theo Tháng để tránh nặng trang.</div>
     <div class="tabs" style="margin-top:0;">
       <button class="tab-btn active" data-subtab="number-raw">Number of Student</button>
       <button class="tab-btn" data-subtab="list-raw">List of Student</button>
@@ -259,12 +260,16 @@
       <section class="table-section">
         <h3>Number of Student (dữ liệu gốc, theo từng lớp/ngày)</h3>
         <div class="table-controls">
-          <input type="text" class="search-box" id="nr-search" placeholder="Tìm theo Program, Class, Date...">
+          <div style="display:flex;gap:10px;align-items:center;">
+            <select id="nr-month-select" class="search-box" style="min-width:140px;"><option value="">— Chọn tháng —</option></select>
+            <button type="button" class="export-btn" id="nr-load">Tải dữ liệu tháng này</button>
+          </div>
           <div style="display:flex;align-items:center;gap:12px;">
             <div class="row-count" id="nr-row-count">0 dòng</div>
             <button type="button" class="export-btn" id="nr-export">⬇ Xuất Excel</button>
           </div>
         </div>
+        <input type="text" class="search-box" id="nr-search" placeholder="Tìm theo Program, Class, Date..." style="width:100%;margin-bottom:10px;">
         <div style="overflow-x:auto;">
           <table class="data-table" id="nr-table">
             <thead><tr id="nr-table-head"></tr></thead>
@@ -281,12 +286,16 @@
       <section class="table-section">
         <h3>List of Student (dữ liệu gốc, theo từng học viên/buổi)</h3>
         <div class="table-controls">
-          <input type="text" class="search-box" id="lr-search" placeholder="Tìm theo tên, mã HV, lớp...">
+          <div style="display:flex;gap:10px;align-items:center;">
+            <select id="lr-month-select" class="search-box" style="min-width:140px;"><option value="">— Chọn tháng —</option></select>
+            <button type="button" class="export-btn" id="lr-load">Tải dữ liệu tháng này</button>
+          </div>
           <div style="display:flex;align-items:center;gap:12px;">
             <div class="row-count" id="lr-row-count">0 dòng</div>
             <button type="button" class="export-btn" id="lr-export">⬇ Xuất Excel</button>
           </div>
         </div>
+        <input type="text" class="search-box" id="lr-search" placeholder="Tìm theo tên, mã HV, lớp..." style="width:100%;margin-bottom:10px;">
         <div style="overflow-x:auto;">
           <table class="data-table" id="lr-table">
             <thead><tr id="lr-table-head"></tr></thead>
@@ -300,6 +309,40 @@
     </div>
   </div>
 
+  <!-- ============ TAB: TRA CỨU HỌC VIÊN ============ -->
+  <div id="tab-lookup" class="hidden">
+    <section class="table-section">
+      <h3>Tra cứu chi tiết từng buổi học của học viên</h3>
+      <div class="hint" style="margin:-4px 0 14px 2px;">Gõ tên hoặc mã học viên để tìm. Nếu học viên học nhiều lớp, chọn đúng lớp cần xem sau khi tìm ra.</div>
+      <div style="position:relative;max-width:420px;">
+        <input type="text" class="search-box" id="lk-search" placeholder="Nhập tên hoặc mã học viên..." autocomplete="off" style="width:100%;">
+        <div id="lk-suggestions" class="ms-panel hidden" style="width:100%;max-height:280px;overflow-y:auto;"></div>
+      </div>
+
+      <div id="lk-loading" class="hidden data-info" style="margin-top:14px;">Đang tải...</div>
+      <div id="lk-result" class="hidden" style="margin-top:18px;">
+        <div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:14px;">
+          <div class="kpi-card" style="border-left-color:#94a3b8;">
+            <div class="kpi-label">Học viên</div>
+            <div class="kpi-value" id="lk-name" style="font-size:17px;">—</div>
+            <div class="kpi-sub" id="lk-meta">—</div>
+          </div>
+          <div class="kpi-card att"><div class="kpi-label">Attendance</div><div class="kpi-value" id="lk-att">0</div></div>
+          <div class="kpi-card abs"><div class="kpi-label">Absence</div><div class="kpi-value" id="lk-abs">0</div></div>
+          <div class="kpi-card late"><div class="kpi-label">Late</div><div class="kpi-value" id="lk-late">0</div></div>
+        </div>
+
+        <div id="lk-class-tabs" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"></div>
+
+        <table class="data-table">
+          <thead><tr><th>Ngày</th><th>Tháng</th><th>Trạng thái</th></tr></thead>
+          <tbody id="lk-table-body"></tbody>
+        </table>
+      </div>
+      <div id="lk-empty" class="data-info" style="margin-top:14px;">Chưa chọn học viên nào.</div>
+    </section>
+  </div>
+
   <footer class="dashboard-footer">
     Cập nhật lần đầu: <span id="data-date"></span> &nbsp;•&nbsp; Dùng nút "Tải file export mới" mỗi tháng để cập nhật số liệu
   </footer>
@@ -308,14 +351,36 @@
 <script>
 const CLASS_DATA = __CLASS_DATA__;
 const STUDENT_DATA = __STUDENT_DATA__;
-// Dữ liệu thô (chưa tổng hợp), giống hệt 2 tab trên LMS — dùng cho tab "Chi tiết".
-// Tên cột phụ thuộc đúng field API trả về, có thể rỗng [] nếu build.py chưa
-// tìm thấy sheet tương ứng trong file Excel.
-const NUMBER_OF_STUDENT_RAW = __NUMBER_OF_STUDENT_RAW__;
-const LIST_OF_STUDENT_RAW = __LIST_OF_STUDENT_RAW__;
 
 // Chi nhánh -> Vùng. Nếu mở chi nhánh mới, thêm 1 dòng vào đây theo đúng định dạng.
 const REGION_MAP = __REGION_MAP__;
+
+// Backend Google Apps Script — tab "Chi tiết" và "Tra cứu Học viên" gọi API này
+// để lấy dữ liệu theo yêu cầu (không nhúng sẵn vào HTML nữa, tránh phình dung
+// lượng theo thời gian). URL này chỉ cho phép ĐỌC (GET), không có quyền ghi.
+const APPS_SCRIPT_URL = '__APPS_SCRIPT_URL__';
+
+function jsonpFetch(url){
+  return new Promise((resolve, reject) => {
+    const cbName = 'jsonp_cb_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const timer = setTimeout(() => { cleanup(); reject(new Error('Quá thời gian chờ phản hồi từ Apps Script (kiểm tra lại URL/kết nối mạng).')); }, 20000);
+    function cleanup(){ clearTimeout(timer); delete window[cbName]; script.remove(); }
+    window[cbName] = (data) => { cleanup(); resolve(data); };
+    script.onerror = () => { cleanup(); reject(new Error('Không tải được dữ liệu từ Apps Script.')); };
+    const sep = url.includes('?') ? '&' : '?';
+    script.src = `${url}${sep}callback=${cbName}`;
+    document.body.appendChild(script);
+  });
+}
+
+function appsScriptGet(params){
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('__APPS_SCRIPT_URL__')){
+    return Promise.reject(new Error('Chưa cấu hình APPS_SCRIPT_URL trong build.py/template.html.'));
+  }
+  const qs = new URLSearchParams(params).toString();
+  return jsonpFetch(`${APPS_SCRIPT_URL}?${qs}`);
+}
 
 const COLORS = { done:'#2e7d32', mid:'#f9a825', bad:'#c62828', att:'#2e7d32', abs:'#c62828', late:'#f9a825' };
 
@@ -470,6 +535,14 @@ class RawTableView{
 
   el(id){ return document.getElementById(`${this.prefix}-${id}`); }
 
+  setData(data){
+    this.data = data || [];
+    this.columns = this.data.length ? Object.keys(this.data[0]).filter(k => k !== 'region') : this.columns;
+    this.page = 0;
+    this.renderHead();
+    this.render();
+  }
+
   renderHead(){
     const head = this.el('table-head');
     if (!this.columns.length){
@@ -570,14 +643,14 @@ class Dashboard{
   static FILTER_DIMS = ['region','branch','program','class_name','month'];
   static STUDENT_FILTER_DIMS = ['region','branch','program','class_name'];
 
-  constructor(classData, studentData, numberRawData, listRawData){
+  constructor(classData, studentData){
     this.loadNewData(classData, studentData, 'dữ liệu mẫu ban đầu');
-    this.numberRawData = numberRawData || [];
-    this.listRawData = listRawData || [];
     this.activeTab = 'overview';
     this.cSort = { key:'att_rate', dir:'asc' }; this.cPage = 0; this.cPageSize = 15; this.cSearch = [];
     this.sSort = { key:'att_rate', dir:'asc' }; this.sPage = 0; this.sPageSize = 15; this.sSearch = [];
     this.charts = {};
+    this.lkSelected = null;
+    this.lkActiveClass = null;
     this.init();
   }
 
@@ -587,8 +660,10 @@ class Dashboard{
     this.setupFilters();
     this.setupTableEvents();
     this.setupUpload();
-    this.numberRawView = new RawTableView('nr', this.numberRawData, 'Number of Student');
-    this.listRawView = new RawTableView('lr', this.listRawData, 'List of Student');
+    this.numberRawView = new RawTableView('nr', [], 'Number of Student');
+    this.listRawView = new RawTableView('lr', [], 'List of Student');
+    this.setupDetailTab();
+    this.setupLookup();
     this.render();
   }
 
@@ -612,6 +687,7 @@ class Dashboard{
         document.getElementById('tab-classes').classList.toggle('hidden', this.activeTab !== 'classes');
         document.getElementById('tab-students').classList.toggle('hidden', this.activeTab !== 'students');
         document.getElementById('tab-detail').classList.toggle('hidden', this.activeTab !== 'detail');
+        document.getElementById('tab-lookup').classList.toggle('hidden', this.activeTab !== 'lookup');
         this.render();
       });
     });
@@ -661,6 +737,132 @@ class Dashboard{
       };
       reader.readAsArrayBuffer(file);
     });
+  }
+
+  // ============ TAB "CHI TIẾT" (Apps Script, tải theo Tháng) ============
+  async setupDetailTab(){
+    const populateSelect = (selectEl, months) => {
+      selectEl.innerHTML = '<option value="">— Chọn tháng —</option>' +
+        months.map(m => `<option value="${m}">${m}</option>`).join('');
+    };
+
+    try{
+      const res = await appsScriptGet({ action:'availableMonths' });
+      const months = (res && res.months) || [];
+      populateSelect(document.getElementById('nr-month-select'), months);
+      populateSelect(document.getElementById('lr-month-select'), months);
+      if (!months.length){
+        document.querySelector('#tab-detail .data-info').textContent =
+          'Chưa có dữ liệu nào trên Apps Script — chờ scrape.js chạy lần đầu, hoặc kiểm tra lại cấu hình APPS_SCRIPT_URL.';
+      }
+    }catch(err){
+      document.querySelector('#tab-detail .data-info').textContent = 'Lỗi tải danh sách tháng: ' + err.message;
+    }
+
+    document.getElementById('nr-load').addEventListener('click', async () => {
+      const month = document.getElementById('nr-month-select').value;
+      if (!month) return alert('Chọn tháng trước đã.');
+      document.getElementById('nr-row-count').textContent = 'Đang tải...';
+      try{
+        const res = await appsScriptGet({ action:'monthNumber', month });
+        this.numberRawView.setData((res && res.rows) || []);
+      }catch(err){ alert('Lỗi tải dữ liệu: ' + err.message); }
+    });
+
+    document.getElementById('lr-load').addEventListener('click', async () => {
+      const month = document.getElementById('lr-month-select').value;
+      if (!month) return alert('Chọn tháng trước đã.');
+      document.getElementById('lr-row-count').textContent = 'Đang tải...';
+      try{
+        const res = await appsScriptGet({ action:'monthList', month });
+        this.listRawView.setData((res && res.rows) || []);
+      }catch(err){ alert('Lỗi tải dữ liệu: ' + err.message); }
+    });
+  }
+
+  // ============ TAB "TRA CỨU HỌC VIÊN" (Apps Script) ============
+  setupLookup(){
+    const input = document.getElementById('lk-search');
+    const panel = document.getElementById('lk-suggestions');
+    let debounceTimer = null;
+
+    const renderSuggestions = async (term) => {
+      term = term.trim();
+      if (!term){ panel.classList.add('hidden'); panel.innerHTML=''; return; }
+      try{
+        const res = await appsScriptGet({ action:'studentSearch', q: term });
+        const results = (res && res.results) || [];
+        if (!results.length){ panel.innerHTML = '<div class="ms-empty">Không tìm thấy học viên</div>'; panel.classList.remove('hidden'); return; }
+        panel.innerHTML = results.map(r => `
+          <div class="ms-option" data-sid="${r.StudentID}" data-cls="${r.ClassName}">
+            <span>${r.Name} <span style="color:var(--text-secondary);">(${r.StudentID})</span> — ${r.Branch} · ${r.ClassName}</span>
+          </div>`).join('');
+        panel.classList.remove('hidden');
+      }catch(err){
+        panel.innerHTML = `<div class="ms-empty">Lỗi tìm kiếm: ${err.message}</div>`;
+        panel.classList.remove('hidden');
+      }
+    };
+
+    input.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => renderSuggestions(input.value), 350);
+    });
+    document.addEventListener('click', (e) => { if (!panel.contains(e.target) && e.target !== input) panel.classList.add('hidden'); });
+
+    panel.addEventListener('click', (e) => {
+      const opt = e.target.closest('.ms-option');
+      if (!opt || !opt.dataset.sid) return;
+      input.value = opt.textContent.trim();
+      panel.classList.add('hidden');
+      this.selectLookupStudent(opt.dataset.sid, opt.dataset.cls);
+    });
+  }
+
+  async selectLookupStudent(studentId, className){
+    this.lkSelected = studentId;
+    this.lkActiveClass = className;
+    document.getElementById('lk-empty').classList.add('hidden');
+    document.getElementById('lk-result').classList.add('hidden');
+    document.getElementById('lk-loading').classList.remove('hidden');
+    try{
+      const res = await appsScriptGet({ action:'studentSessions', student_id: studentId, class_name: className });
+      this.renderLookupResult(res);
+    }catch(err){
+      alert('Lỗi tải dữ liệu học viên: ' + err.message);
+    }finally{
+      document.getElementById('lk-loading').classList.add('hidden');
+    }
+  }
+
+  renderLookupResult(res){
+    const rows = (res && res.rows) || [];
+    const student = res && res.student;
+    document.getElementById('lk-result').classList.remove('hidden');
+
+    document.getElementById('lk-name').textContent = student ? student.Name : this.lkSelected;
+    document.getElementById('lk-meta').textContent = student ? `${student.Branch} · ${student.Program} · Lớp ${student.ClassName}` : '';
+
+    let att=0, abs=0, late=0;
+    rows.forEach(r => {
+      const t = String(r.Type||'').trim().toLowerCase();
+      if (t==='attendance') att++; else if (t==='absence') abs++; else if (t==='late') late++;
+    });
+    document.getElementById('lk-att').textContent = att.toLocaleString('vi-VN');
+    document.getElementById('lk-abs').textContent = abs.toLocaleString('vi-VN');
+    document.getElementById('lk-late').textContent = late.toLocaleString('vi-VN');
+
+    const sorted = [...rows].sort((a,b) => String(a.Date).localeCompare(String(b.Date)));
+    const tbody = document.getElementById('lk-table-body');
+    if (!sorted.length){
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-secondary);padding:16px;">Không có dữ liệu buổi học nào cho lớp này.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = sorted.map(r => {
+      const t = String(r.Type||'').trim().toLowerCase();
+      const color = t==='attendance' ? COLORS.att : t==='absence' ? COLORS.abs : t==='late' ? COLORS.late : '#94a3b8';
+      return `<tr><td>${r.Date ?? ''}</td><td>${r.Month ?? ''}</td><td><span class="status-badge" style="background:${color}">${r.Type ?? ''}</span></td></tr>`;
+    }).join('');
   }
 
   parseClassSheet(rows){
@@ -1048,7 +1250,7 @@ class Dashboard{
   }
 }
 
-const dashboard = new Dashboard(CLASS_DATA, STUDENT_DATA, NUMBER_OF_STUDENT_RAW, LIST_OF_STUDENT_RAW);
+const dashboard = new Dashboard(CLASS_DATA, STUDENT_DATA);
 </script>
 </body>
 </html>

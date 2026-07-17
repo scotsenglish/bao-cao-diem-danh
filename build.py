@@ -137,48 +137,6 @@ def parse_student_summary(ws):
     return out
 
 
-def _cell_to_jsonable(value):
-    """Chuyển giá trị cell Excel (có thể là datetime/date) thành string/number
-    để nhét thẳng vào JSON mà không lỗi."""
-    if value is None:
-        return ""
-    if hasattr(value, "isoformat"):
-        return value.isoformat()
-    return value
-
-
-def parse_raw_sheet(ws):
-    """Đọc 1 sheet 'thô' (raw) theo ĐÚNG tên cột thật có trong sheet, không cố
-    định trước danh sách cột — dùng cho các sheet 'Number of Student' và
-    'List of Student' vì tên cột thật từ API có thể khác giữa các lần cập nhật.
-
-    Trả về list các dict với key = tên cột (giữ nguyên as-is trong Excel).
-    Nếu sheet có cột 'Branch', tự thêm field 'region' (ánh xạ theo REGION_MAPPING)
-    để dashboard có thể lọc theo Vùng.
-    """
-    if ws is None:
-        return []
-    rows_iter = ws.iter_rows(min_row=1, values_only=True)
-    try:
-        header = next(rows_iter)
-    except StopIteration:
-        return []
-    # Bỏ qua cột không có tên (None) — Excel đôi khi có cột thừa/trống ở cuối
-    columns = [(i, str(h)) for i, h in enumerate(header) if h is not None and str(h).strip() != ""]
-
-    out = []
-    for row in rows_iter:
-        if not row or all(v is None for v in row):
-            continue
-        record = {}
-        for i, col_name in columns:
-            record[col_name] = _cell_to_jsonable(row[i] if i < len(row) else None)
-        if "Branch" in record:
-            record["region"] = region_of(str(record["Branch"]).strip())
-        out.append(record)
-    return out
-
-
 def main():
     if not os.path.exists(DATA_FILE):
         print(f"Không tìm thấy file dữ liệu: {DATA_FILE}", file=sys.stderr)
@@ -203,15 +161,6 @@ def main():
     class_data = parse_class_summary_monthly(wb["Class Summary Monthly"])
     student_data = parse_student_summary(wb["Student Summary"])
 
-    number_raw_ws = wb["Number of Student"] if "Number of Student" in wb.sheetnames else None
-    list_raw_ws = wb["List of Student"] if "List of Student" in wb.sheetnames else None
-    number_raw_data = parse_raw_sheet(number_raw_ws)
-    list_raw_data = parse_raw_sheet(list_raw_ws)
-    if number_raw_ws is None:
-        print("Lưu ý: không có sheet 'Number of Student' -> tab 'Chi tiết' phần Number of Student sẽ trống.")
-    if list_raw_ws is None:
-        print("Lưu ý: không có sheet 'List of Student' -> tab 'Chi tiết' phần List of Student sẽ trống.")
-
     unmapped = sorted({
         d["branch"] for d in (class_data + student_data)
         if d["region"] == "Chưa gán vùng"
@@ -222,24 +171,16 @@ def main():
             print(f"  - {b}")
         print("Dashboard vẫn build bình thường, các chi nhánh này sẽ hiện 'Chưa gán vùng'.")
 
-    print(
-        f"Đã xử lý {len(class_data)} dòng lớp/tháng, {len(student_data)} học viên, "
-        f"{len(number_raw_data)} dòng Number of Student (raw), {len(list_raw_data)} dòng List of Student (raw)."
-    )
+    print(f"Đã xử lý {len(class_data)} dòng lớp/tháng, {len(student_data)} học viên.")
 
     class_json = json.dumps(class_data, ensure_ascii=False, separators=(",", ":"))
     student_json = json.dumps(student_data, ensure_ascii=False, separators=(",", ":"))
-    number_raw_json = json.dumps(number_raw_data, ensure_ascii=False, separators=(",", ":"))
-    list_raw_json = json.dumps(list_raw_data, ensure_ascii=False, separators=(",", ":"))
     region_json = json.dumps(REGION_MAPPING, ensure_ascii=False, separators=(",", ":"))
 
     with open(TEMPLATE_FILE, "r", encoding="utf-8") as f:
         html = f.read()
 
-    required_placeholders = [
-        "__CLASS_DATA__", "__STUDENT_DATA__", "__REGION_MAP__",
-        "__NUMBER_OF_STUDENT_RAW__", "__LIST_OF_STUDENT_RAW__",
-    ]
+    required_placeholders = ["__CLASS_DATA__", "__STUDENT_DATA__", "__REGION_MAP__", "__APPS_SCRIPT_URL__"]
     missing_ph = [p for p in required_placeholders if p not in html]
     if missing_ph:
         print(
@@ -248,11 +189,17 @@ def main():
         )
         sys.exit(1)
 
+    apps_script_url = os.environ.get("APPS_SCRIPT_URL", "")
+    if not apps_script_url:
+        print(
+            "CẢNH BÁO: chưa có biến môi trường APPS_SCRIPT_URL -> tab 'Chi tiết' và "
+            "'Tra cứu Học viên' sẽ không hoạt động (không có URL để gọi)."
+        )
+
     html = html.replace("const CLASS_DATA = __CLASS_DATA__;", "const CLASS_DATA = " + class_json + ";")
     html = html.replace("const STUDENT_DATA = __STUDENT_DATA__;", "const STUDENT_DATA = " + student_json + ";")
     html = html.replace("const REGION_MAP = __REGION_MAP__;", "const REGION_MAP = " + region_json + ";")
-    html = html.replace("const NUMBER_OF_STUDENT_RAW = __NUMBER_OF_STUDENT_RAW__;", "const NUMBER_OF_STUDENT_RAW = " + number_raw_json + ";")
-    html = html.replace("const LIST_OF_STUDENT_RAW = __LIST_OF_STUDENT_RAW__;", "const LIST_OF_STUDENT_RAW = " + list_raw_json + ";")
+    html = html.replace("__APPS_SCRIPT_URL__", apps_script_url)
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         f.write(html)
