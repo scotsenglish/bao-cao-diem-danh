@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       months_back:
-        description: "Số tháng lùi về để lấy dữ liệu (mặc định 3)"
+        description: '"all" = lấy toàn bộ lịch sử (mặc định). Hoặc nhập số tháng (vd "3") để chỉ lấy gần đây, chạy nhanh hơn.'
         required: false
-        default: "3"
+        default: "all"
 
 permissions:
   contents: write
@@ -53,10 +53,10 @@ jobs:
 
       - name: Run scraper (lấy dữ liệu từ LMS)
         env:
-          LMS_USERNAME: ${{ secrets.LMS_USERNAME }}
-          LMS_PASSWORD: ${{ secrets.LMS_PASSWORD }}
+          LMS_LOGIN_ID: ${{ secrets.LMS_LOGIN_ID }}
+          LMS_LOGIN_PASSWORD: ${{ secrets.LMS_LOGIN_PASSWORD }}
           STAFF_ID: ${{ secrets.LMS_STAFF_ID }}
-          MONTHS_BACK: ${{ github.event.inputs.months_back || '3' }}
+          MONTHS_BACK: ${{ github.event.inputs.months_back || 'all' }}
         run: node scrape.js
 
       - name: Build index.html từ dữ liệu vừa lấy
@@ -76,4 +76,12 @@ jobs:
         with:
           name: attendance-checkpoint
           path: data/.attendance_checkpoint.json
+          if-no-files-found: ignore
+
+      - name: Upload ảnh/HTML debug nếu đăng nhập LMS thất bại
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: attendance-login-debug
+          path: debug/
           if-no-files-found: ignore
