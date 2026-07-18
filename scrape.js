@@ -374,42 +374,39 @@ async function appsScriptPost(action, payload) {
   }
 }
 
-// Gộp rows theo (year, month) rồi gửi lên Apps Script — chia nhỏ theo lô để
-// tránh 1 request quá lớn (Apps Script có giới hạn kích thước request).
+// Gộp rows theo THÁNG (thay vì theo năm) rồi gửi lên Apps Script — mỗi tháng
+// ghi vào 1 tab riêng, chia nhỏ theo lô để tránh 1 request quá lớn.
 async function pushMonthlySheet(sheetName, rows) {
   if (!rows.length) return;
-  const byYear = {};
+  const byMonth = {};
   rows.forEach((r) => {
-    const year = yearOfMonthStr_(r.Month);
-    if (!year) return;
-    (byYear[year] = byYear[year] || []).push(r);
+    if (!r.Month) return;
+    (byMonth[r.Month] = byMonth[r.Month] || []).push(r);
   });
 
-  for (const year of Object.keys(byYear)) {
-    const yearRows = byYear[year];
-    const monthsInYear = Array.from(new Set(yearRows.map((r) => r.Month)));
-    const chunks = chunkArray(yearRows, 3000);
-    console.log(`   📤 Đẩy ${sheetName} năm ${year}: ${yearRows.length} dòng, ${monthsInYear.length} tháng, chia ${chunks.length} lô...`);
+  for (const month of Object.keys(byMonth)) {
+    const monthRows = byMonth[month];
+    const chunks = chunkArray(monthRows, 3000);
+    console.log(`   📤 Đẩy ${sheetName} tháng ${month}: ${monthRows.length} dòng, chia ${chunks.length} lô...`);
     for (let i = 0; i < chunks.length; i++) {
-      // Chỉ báo "months" (để Apps Script xoá dữ liệu cũ trước khi ghi) ở LÔ ĐẦU
-      // TIÊN của mỗi năm — các lô sau chỉ nối thêm (không xoá lại, tránh xoá
-      // mất dữ liệu vừa ghi ở lô trước đó trong CÙNG 1 lần chạy này).
-      const months = i === 0 ? monthsInYear : [];
-      const result = await appsScriptPost('upsertMonths', { year, sheetName, months, rows: chunks[i] });
-      if (result && result.error) throw new Error(`Apps Script lỗi (${sheetName}, năm ${year}, lô ${i + 1}/${chunks.length}): ${result.error}`);
+      // Lô ĐẦU TIÊN của tháng này: xoá sạch tab tháng đó rồi ghi mới (thao tác
+      // nhẹ vì tab chỉ chứa đúng 1 tháng). Các lô sau chỉ nối thêm, không xoá.
+      const replace = i === 0;
+      const result = await appsScriptPost('replaceMonth', { month, sheetName, replace, rows: chunks[i] });
+      if (result && result.error) throw new Error(`Apps Script lỗi (${sheetName}, tháng ${month}, lô ${i + 1}/${chunks.length}): ${result.error}`);
     }
   }
 }
 
-// Xây danh sách "chỉ mục học viên" (student_id + lớp -> những năm có dữ liệu)
-// từ listRawRows, để tab Tra cứu Học viên biết cần mở năm nào khi tìm kiếm.
+// Xây danh sách "chỉ mục học viên" (student_id + lớp -> những THÁNG có dữ
+// liệu) từ listRawRows, để tab Tra cứu Học viên biết cần mở đúng tab tháng
+// nào khi tìm kiếm (không cần quét cả năm).
 function buildStudentIndexEntries(listRawRows) {
   const seen = new Set();
   const entries = [];
   listRawRows.forEach((r) => {
-    const year = yearOfMonthStr_(r.Month);
-    if (!year || !r.ID || !r.Class) return;
-    const key = `${r.ID}||${r.Class}||${year}`;
+    if (!r.Month || !r.ID || !r.Class) return;
+    const key = `${r.ID}||${r.Class}||${r.Month}`;
     if (seen.has(key)) return;
     seen.add(key);
     entries.push({
@@ -418,7 +415,7 @@ function buildStudentIndexEntries(listRawRows) {
       branch: r.Branch,
       program: r.Program,
       class_name: r.Class,
-      year,
+      month: r.Month,
     });
   });
   return entries;
