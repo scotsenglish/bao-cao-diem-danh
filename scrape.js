@@ -359,18 +359,48 @@ function yearOfMonthStr_(monthStr) {
   return parts.length === 2 ? parts[1] : null;
 }
 
-async function appsScriptPost(action, payload) {
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(Object.assign({ action, token: APPS_SCRIPT_TOKEN }, payload)),
-    redirect: 'follow',
-  });
-  const text = await res.text();
+function sleep_(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+// Gọi Apps Script với TỰ ĐỘNG THỬ LẠI — ở quy mô hàng chục request liên tiếp,
+// thỉnh thoảng 1 request bị "trục trặc thoáng qua" phía Google (timeout, giới
+// hạn xử lý đồng thời...) là bình thường, không nên để cả job thất bại vì 1
+// request lẻ tẻ như vậy.
+async function appsScriptPost(action, payload, attempt) {
+  attempt = attempt || 1;
+  const MAX_ATTEMPTS = 4;
   try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(`Phản hồi từ Apps Script không phải JSON hợp lệ (có thể do sai URL/token, hoặc deploy chưa đúng): ${text.slice(0, 300)}`);
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action, token: APPS_SCRIPT_TOKEN }, payload)),
+      redirect: 'follow',
+    });
+    const text = await res.text();
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error(`Phản hồi không phải JSON hợp lệ: ${text.slice(0, 300)}`);
+    }
+    // "action: undefined" nghĩa là request bị mất nội dung (body) trên đường
+    // đi — dấu hiệu điển hình của lỗi thoáng qua (redirect/timeout phía Google),
+    // không phải lỗi logic thật -> đáng để thử lại.
+    const isTransientError = parsed && parsed.error && /Không nhận diện được action: undefined/.test(parsed.error);
+    if (isTransientError && attempt < MAX_ATTEMPTS) {
+      const waitMs = attempt * 2000;
+      console.log(`   ⚠️  Lỗi thoáng qua khi gọi Apps Script (lần ${attempt}/${MAX_ATTEMPTS}) — thử lại sau ${waitMs / 1000}s...`);
+      await sleep_(waitMs);
+      return appsScriptPost(action, payload, attempt + 1);
+    }
+    return parsed;
+  } catch (err) {
+    if (attempt < MAX_ATTEMPTS) {
+      const waitMs = attempt * 2000;
+      console.log(`   ⚠️  Lỗi mạng khi gọi Apps Script (lần ${attempt}/${MAX_ATTEMPTS}): ${err.message} — thử lại sau ${waitMs / 1000}s...`);
+      await sleep_(waitMs);
+      return appsScriptPost(action, payload, attempt + 1);
+    }
+    throw err;
   }
 }
 
