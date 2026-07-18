@@ -431,7 +431,7 @@ function jsonpFetch(url){
 }
 
 function appsScriptGet(params){
-  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('__APPS_SCRIPT_URL__')){
+  if (!APPS_SCRIPT_URL){
     return Promise.reject(new Error('Chưa cấu hình APPS_SCRIPT_URL trong build.py/template.html.'));
   }
   const qs = new URLSearchParams(params).toString();
