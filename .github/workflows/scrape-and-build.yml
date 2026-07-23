@@ -5,9 +5,9 @@ name: Scrape & Build Attendance Dashboard
 # Cũng có thể chạy tay từ tab "Actions" trên GitHub (nút "Run workflow").
 on:
   schedule:
-    - cron: "0 23 * * *"  # 06:00 giờ VN
-    - cron: "0 5 * * *"   # 12:00 giờ VN
-    - cron: "0 11 * * *"  # 18:00 giờ VN
+    - cron: "13 23 * * *"  # ~06:13 giờ VN (né phút 0, giờ cao điểm dễ bị trễ/bỏ lịch)
+    - cron: "27 5 * * *"   # ~12:27 giờ VN
+    - cron: "42 11 * * *"  # ~18:42 giờ VN
   workflow_dispatch:
     inputs:
       months_back:
@@ -31,7 +31,7 @@ concurrency:
 jobs:
   scrape-and-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -103,6 +103,22 @@ jobs:
             fi
           done
 
+      - name: Gửi email thông báo chạy THẤT BẠI
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          from: Attendance Dashboard Bot
+          to: ${{ secrets.MAIL_TO }}
+          subject: "❌ Attendance Dashboard chạy THẤT BẠI"
+          body: |
+            Workflow "Scrape & Build Attendance Dashboard" vừa chạy bị lỗi, cần kiểm tra.
+
+            Xem log chi tiết tại: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
       - name: Upload checkpoint nếu job bị lỗi giữa chừng (để debug)
         if: failure()
         uses: actions/upload-artifact@v4
@@ -118,3 +134,20 @@ jobs:
           name: attendance-login-debug
           path: debug/
           if-no-files-found: ignore
+
+      - name: Gửi email thông báo chạy thành công
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          from: Attendance Dashboard Bot
+          to: ${{ secrets.MAIL_TO }}
+          subject: "✅ Attendance Dashboard đã cập nhật thành công"
+          body: |
+            Workflow "Scrape & Build Attendance Dashboard" vừa chạy xong thành công.
+
+            Xem dashboard tại: https://scotsenglish.github.io/bao-cao-diem-danh/
+            Chi tiết log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
