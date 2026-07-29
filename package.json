@@ -4,7 +4,8 @@
   "private": true,
   "description": "Scraper tự động lấy dữ liệu Attendance từ i-Learning LMS cho dashboard.",
   "scripts": {
-    "scrape": "node scrape.js"
+    "scrape": "node scrape.js",
+    "backup:drive": "node scripts/backup-drive.js"
   },
   "dependencies": {
     "playwright": "^1.48.0",

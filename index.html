@@ -1163,7 +1163,7 @@ class Dashboard{
     const regionAgg = this.groupBy(data, 'region');
     const regionLabels = Object.keys(regionAgg).sort((a,b)=>a.localeCompare(b,'vi'));
 
-    let html = '<table class="data-table"><thead><tr><th>Vùng</th><th>Chi nhánh</th><th>Tổng số lớp (lượt/tháng)</th><th>Số lớp &lt;80%</th><th>Tỷ lệ lớp &lt;80%</th></tr></thead><tbody>';
+    let html = '<table class="data-table"><thead><tr><th>Vùng</th><th>Chi nhánh</th><th>Số lớp &lt;80%</th><th>Tỷ lệ lớp &lt;80%</th></tr></thead><tbody>';
     regionLabels.forEach(region => {
       const regionRows = regionAgg[region];
       const branchAgg = this.groupBy(regionRows, 'branch');
@@ -1171,13 +1171,13 @@ class Dashboard{
       const regionTotal = regionRows.length;
       const regionUnder80 = regionRows.filter(d => d.att_rate < 81).length;
       const regionPct = regionTotal ? (regionUnder80/regionTotal*100) : 0;
-      html += `<tr style="background:#f4f6f9;font-weight:700;"><td>${region}</td><td>— Tổng Vùng —</td><td>${regionTotal}</td><td>${regionUnder80}</td><td>${regionPct.toFixed(2)}%</td></tr>`;
+      html += `<tr style="background:#f4f6f9;font-weight:700;"><td>${region}</td><td>— Tổng Vùng —</td><td>${regionUnder80}</td><td>${regionPct.toFixed(2)}%</td></tr>`;
       branchLabels.forEach(branch => {
         const rows = branchAgg[branch];
         const total = rows.length;
         const under80 = rows.filter(d => d.att_rate < 81).length;
         const pct = total ? (under80/total*100) : 0;
-        html += `<tr><td></td><td>${branch}</td><td>${total}</td><td>${under80}</td><td><span class="status-badge" style="background:${pct>0?rateColor(100-pct):COLORS.done}">${pct.toFixed(2)}%</span></td></tr>`;
+        html += `<tr><td></td><td>${branch}</td><td>${under80}</td><td><span class="status-badge" style="background:${pct>0?rateColor(100-pct):COLORS.done}">${pct.toFixed(2)}%</span></td></tr>`;
       });
     });
     html += '</tbody></table>';

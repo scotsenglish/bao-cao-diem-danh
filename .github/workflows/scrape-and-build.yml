@@ -66,6 +66,12 @@ jobs:
           APPS_SCRIPT_TOKEN: ${{ secrets.APPS_SCRIPT_TOKEN }}
         run: node scrape.js
 
+      - name: Backup data/latest.xlsx lên Google Drive
+        env:
+          ILEARNING_APPS_SCRIPT_URL: ${{ secrets.ILEARNING_APPS_SCRIPT_URL }}
+          ILEARNING_APPS_SCRIPT_TOKEN: ${{ secrets.ILEARNING_APPS_SCRIPT_TOKEN }}
+        run: node scripts/backup-drive.js
+
       - name: Build index.html từ dữ liệu vừa lấy
         env:
           APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
