@@ -1,0 +1,5 @@
+node_modules/
+debug/
+data/.attendance_checkpoint.json
+data/attendance_report.xlsx
+.DS_Store

@@ -802,21 +802,27 @@ class Dashboard{
         months.map(m => `<option value="${m}">${m}</option>`).join('');
     };
 
+    // Danh sách tháng đọc từ file JSON tĩnh (data/live-data.json, do scrape.js
+    // ghi sẵn + commit vào repo) thay vì gọi thẳng Apps Script mỗi lần mở
+    // trang — Apps Script chỉ chịu được ~30 lượt thực thi đồng thời, dễ quá
+    // tải nếu hàng trăm người cùng mở dashboard một lúc. File tĩnh này được
+    // GitHub Pages (CDN) phục vụ nên chịu tải gần như vô hạn. Cache-busting
+    // bằng timestamp lúc fetch (không phải lúc dữ liệu cập nhật) để chắc chắn
+    // né cache trình duyệt/CDN, luôn lấy đúng bản mới nhất.
     try{
-      const res = await appsScriptGet({ action:'availableMonths' });
-      if (res && res.error){
-        document.querySelector('#tab-detail .data-info').textContent = 'Lỗi từ Apps Script: ' + res.error;
-        return;
-      }
-      const months = (res && res.months) || [];
+      const res = await fetch(`data/live-data.json?t=${Date.now()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const months = (data && data.months) || [];
       populateSelect(document.getElementById('nr-month-select'), months);
       populateSelect(document.getElementById('lr-month-select'), months);
       if (!months.length){
         document.querySelector('#tab-detail .data-info').textContent =
-          'Chưa có dữ liệu nào trên Apps Script — chờ scrape.js chạy lần đầu, hoặc kiểm tra lại cấu hình APPS_SCRIPT_URL.';
+          'Chưa có dữ liệu nào — chờ scrape.js chạy lần đầu, hoặc kiểm tra lại cấu hình APPS_SCRIPT_URL.';
       }
     }catch(err){
-      document.querySelector('#tab-detail .data-info').textContent = 'Lỗi tải danh sách tháng: ' + err.message;
+      document.querySelector('#tab-detail .data-info').textContent =
+        'Lỗi tải danh sách tháng (data/live-data.json): ' + err.message;
     }
 
     document.getElementById('nr-load').addEventListener('click', async () => {

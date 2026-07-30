@@ -474,6 +474,40 @@ async function pushDetailToAppsScript(state) {
 }
 
 // ---------------------------------------------------------------------------
+// GHI data/live-data.json — file tĩnh chứa danh sách "tháng có dữ liệu" cho
+// tab "Chi tiết", để dashboard đọc qua GitHub Pages (CDN, chịu tải vô hạn)
+// thay vì mỗi người mở trang đều gọi thẳng Apps Script (JSONP) — Apps Script
+// chỉ giới hạn ~30 lượt thực thi ĐỒNG THỜI, dễ quá tải khi có hàng trăm người
+// mở trang gần như cùng lúc. Đây là request GET DUY NHẤT, chạy trên máy chủ
+// GitHub Actions (không phải trình duyệt người dùng) nên không tốn quota này.
+//
+// LƯU Ý: 'availableMonths' phản ánh TOÀN BỘ lịch sử tích luỹ trong Google
+// Sheet backend (được ghi dồn qua nhiều lần scrape), không chỉ riêng phần
+// vừa cào trong lần chạy này — nên phải gọi lại Apps Script để lấy đúng danh
+// sách đầy đủ, không được tự suy ra từ state.numberRows/listRawRows (sẽ thiếu
+// các tháng cũ hơn DETAIL_MONTHS_BACK).
+async function writeLiveDataJson() {
+  if (!APPS_SCRIPT_URL) {
+    console.log('⚠️  Chưa cấu hình APPS_SCRIPT_URL — bỏ qua ghi data/live-data.json (tab "Chi tiết" sẽ không có danh sách tháng).');
+    return;
+  }
+  console.log('== Đang lấy danh sách tháng (availableMonths) để ghi data/live-data.json ==');
+  try {
+    const res = await fetch(`${APPS_SCRIPT_URL}?action=availableMonths`);
+    const parsed = await res.json();
+    if (parsed && parsed.error) throw new Error(parsed.error);
+    const months = (parsed && parsed.months) || [];
+
+    const liveData = { months, lastUpdated: new Date().toISOString() };
+    const outPath = path.join(REPO_ROOT, 'data', 'live-data.json');
+    fs.writeFileSync(outPath, JSON.stringify(liveData));
+    console.log(`💾 Đã ghi ${outPath} (${months.length} tháng).`);
+  } catch (err) {
+    console.log(`⚠️  Lấy availableMonths thất bại: ${err.message} — data/live-data.json sẽ không được cập nhật lần này.`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // MAIN
 // ---------------------------------------------------------------------------
 async function main() {
@@ -576,6 +610,8 @@ async function main() {
     console.log(`⚠️  Đẩy dữ liệu lên Apps Script thất bại: ${err.message}`);
     console.log('   (data/latest.xlsx vẫn được ghi/commit bình thường — tab "Chi tiết"/"Tra cứu Học viên" sẽ tạm chưa cập nhật cho tới lần chạy sau).');
   }
+
+  await writeLiveDataJson();
 
   clearCheckpoint(); // job chạy xong trọn vẹn -> xoá checkpoint để lần sau chạy từ đầu
 }
