@@ -75,7 +75,7 @@
   .tab-dock .tab-flyout{left:auto;right:100%;top:0;margin-top:0;margin-right:0;}
 
   .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:var(--gap);margin-bottom:var(--gap);}
-  .kpi-card{background:var(--bg-card);border-radius:var(--radius);padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);border-left:4px solid #cbd5e1;}
+  .kpi-card{background:var(--bg-card);border-radius:var(--radius);padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);border-left:4px solid #cbd5e1;min-width:0;}
   .kpi-card.ok{border-left-color:var(--done);}
   .kpi-card.att{border-left-color:var(--att);}
   .kpi-card.abs{border-left-color:var(--abs);}
@@ -86,7 +86,8 @@
   .kpi-value-pair .kpi-value{margin-bottom:0;}
   .kpi-value-pair .kpi-pct{font-size:23px;font-weight:700;color:var(--text-secondary);}
   .kpi-value-pair .kpi-sep{color:var(--border);font-weight:400;font-size:18px;}
-  .kpi-sub{font-size:11px;color:var(--text-secondary);}
+  .kpi-sub{font-size:11px;color:var(--text-secondary);overflow-wrap:anywhere;}
+  .kpi-value{overflow-wrap:anywhere;}
   .section-label{font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin:4px 0 8px 2px;}
 
   .chart-row{display:grid;grid-template-columns:1.3fr 1fr;gap:var(--gap);margin-bottom:var(--gap);}
@@ -136,6 +137,9 @@
   .modal-close{border:none;background:#f1f3f5;border-radius:6px;width:30px;height:30px;flex:none;cursor:pointer;font-size:15px;color:var(--text-secondary);}
   .modal-close:hover{background:#e5e7eb;}
   .modal-body{padding:16px 22px 22px;overflow:auto;}
+  .modal-body .kpi-row{gap:10px;}
+  .modal-body .kpi-card{padding:12px 14px;}
+  .modal-body .kpi-value-pair .kpi-value, .modal-body .kpi-value-pair .kpi-pct{font-size:18px;}
 
   .modal-student-list{display:flex;flex-direction:column;gap:8px;}
   .modal-student-card{border:1px solid var(--border);border-radius:8px;padding:10px 14px;cursor:pointer;transition:box-shadow .15s ease,border-color .15s ease;}
@@ -1163,6 +1167,8 @@ class Dashboard{
       const t = String(r.Type||'').trim().toLowerCase();
       if (t==='attendance') att++; else if (t==='absence') abs++; else if (t==='late') late++;
     });
+    const total = att + abs + late;
+    const pct = (n) => total ? (n/total*100).toFixed(2) : '0.00';
 
     const sorted = [...rows].sort((a,b) => String(a.Date).localeCompare(String(b.Date)));
     const bodyRows = sorted.length
@@ -1174,15 +1180,15 @@ class Dashboard{
       : '<tr><td colspan="3" style="text-align:center;color:var(--text-secondary);padding:16px;">Không có dữ liệu buổi học nào cho lớp này.</td></tr>';
 
     return `
-      <div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:14px;">
+      <div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:14px;">
         <div class="kpi-card" style="border-left-color:#94a3b8;">
           <div class="kpi-label">Học viên</div>
-          <div class="kpi-value" style="font-size:17px;">${name}</div>
+          <div class="kpi-value" style="font-size:16px;">${name}</div>
           <div class="kpi-sub">${meta}</div>
         </div>
-        <div class="kpi-card att"><div class="kpi-label">Attendance</div><div class="kpi-value">${att.toLocaleString('vi-VN')}</div></div>
-        <div class="kpi-card abs"><div class="kpi-label">Absence</div><div class="kpi-value">${abs.toLocaleString('vi-VN')}</div></div>
-        <div class="kpi-card late"><div class="kpi-label">Late</div><div class="kpi-value">${late.toLocaleString('vi-VN')}</div></div>
+        <div class="kpi-card att"><div class="kpi-label">Attendance</div><div class="kpi-value-pair"><span class="kpi-value">${att.toLocaleString('vi-VN')}</span><span class="kpi-sep">•</span><span class="kpi-pct">${pct(att)}%</span></div></div>
+        <div class="kpi-card abs"><div class="kpi-label">Absence</div><div class="kpi-value-pair"><span class="kpi-value">${abs.toLocaleString('vi-VN')}</span><span class="kpi-sep">•</span><span class="kpi-pct">${pct(abs)}%</span></div></div>
+        <div class="kpi-card late"><div class="kpi-label">Late</div><div class="kpi-value-pair"><span class="kpi-value">${late.toLocaleString('vi-VN')}</span><span class="kpi-sep">•</span><span class="kpi-pct">${pct(late)}%</span></div></div>
       </div>
       <table class="data-table">
         <thead><tr><th>Ngày</th><th>Tháng</th><th>Trạng thái</th></tr></thead>
