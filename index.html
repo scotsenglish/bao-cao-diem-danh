@@ -19,6 +19,7 @@
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg-page);color:var(--text-primary);}
   .dashboard-container{max-width:1550px;margin:0 auto;padding:20px;}
 
+  .header-sticky-wrap{position:sticky;top:0;z-index:50;background:var(--bg-page);padding-top:20px;margin-top:-20px;}
   .dashboard-header{background:linear-gradient(120deg,var(--brand-navy) 55%,#0f5f8c 100%);color:var(--text-on-dark);padding:20px 26px;border-radius:var(--radius);margin-bottom:var(--gap);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;border-bottom:3px solid var(--brand-teal);}
   .dashboard-header h1{font-size:19px;font-weight:700;margin:0 0 4px 0;}
   .dashboard-header p{margin:0;font-size:12.5px;opacity:.8;}
@@ -51,9 +52,27 @@
 
   .data-info{font-size:11.5px;color:var(--text-secondary);margin:-8px 0 12px 2px;}
 
-  .tabs{display:flex;gap:8px;margin-bottom:var(--gap);}
-  .tab-btn{padding:10px 18px;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:13px;font-weight:600;cursor:pointer;color:var(--text-secondary);}
+  .tabs{display:flex;gap:8px;margin-bottom:var(--gap);flex-wrap:wrap;}
+  .tab-btn{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:13px;font-weight:600;cursor:pointer;color:var(--text-secondary);}
   .tab-btn.active{background:var(--bg-header);color:#fff;border-color:var(--bg-header);}
+  .tab-icon-svg{flex:none;}
+
+  .tab-trigger-wrap{position:relative;display:inline-block;}
+  .tab-flyout{position:absolute;top:100%;left:0;margin-top:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 10px 28px rgba(0,0,0,.18);min-width:230px;padding:6px;z-index:70;display:none;flex-direction:column;}
+  .tab-trigger-wrap:hover .tab-flyout, .tab-dock-item-wrap:hover .tab-flyout{display:flex;}
+  .tab-flyout-item{display:block;width:100%;text-align:left;padding:8px 10px;border:none;background:none;border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--text-primary);}
+  .tab-flyout-item:hover{background:#f4f6f9;}
+
+  .tab-dock{position:fixed;right:18px;top:50%;transform:translateY(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;opacity:0;visibility:hidden;transition:opacity .2s ease;}
+  .tab-dock.visible{opacity:1;visibility:visible;}
+  .tab-dock-item-wrap{position:relative;}
+  .tab-dock-btn{width:42px;height:42px;border-radius:50%;border:1px solid var(--border);background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.16);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-secondary);padding:0;}
+  .tab-dock-btn.active{background:var(--bg-header);color:#fff;border-color:var(--bg-header);}
+  .tab-dock-btn:hover{background:#eef2f7;}
+  .tab-dock-btn.active:hover{background:var(--bg-header);}
+  .tab-dock-tooltip{position:absolute;right:100%;top:50%;transform:translateY(-50%);margin-right:10px;background:#1a1f2b;color:#fff;font-size:11.5px;padding:5px 9px;border-radius:6px;white-space:nowrap;display:none;pointer-events:none;}
+  .tab-dock-item-wrap:hover .tab-dock-tooltip{display:block;}
+  .tab-dock .tab-flyout{left:auto;right:100%;top:0;margin-top:0;margin-right:0;}
 
   .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:var(--gap);margin-bottom:var(--gap);}
   .kpi-card{background:var(--bg-card);border-radius:var(--radius);padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);border-left:4px solid #cbd5e1;}
@@ -98,10 +117,31 @@
   .data-table thead th:hover{background:#f8f9fa;}
   .data-table tbody td{padding:7px 8px;border-bottom:1px solid #f5f5f5;white-space:nowrap;}
   .data-table tbody tr:hover{background:#f8f9fa;}
+  .data-table tbody tr.clickable-row{cursor:pointer;}
+  .data-table tbody tr.clickable-row:hover{background:#eef2f7;}
   .status-badge{padding:3px 9px;border-radius:12px;font-size:10.5px;font-weight:700;color:#fff;display:inline-block;}
   .pagination{display:flex;gap:6px;justify-content:flex-end;margin-top:10px;align-items:center;font-size:12px;}
   .pagination button{border:1px solid var(--border);background:#fff;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px;}
   .pagination button:disabled{opacity:.4;cursor:default;}
+
+  /* ===== Modal chi tiết (click 1 dòng trong bảng Lớp/Học viên) ===== */
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:2000;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .modal-overlay.hidden{display:none;}
+  .modal-box{background:#fff;border-radius:var(--radius);max-width:min(900px,95vw);width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+  .modal-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:16px 22px;border-bottom:1px solid var(--border);flex:none;}
+  .modal-header h3{margin:4px 0 0;font-size:15.5px;}
+  .modal-back{border:none;background:none;color:var(--brand-navy);font-size:12px;font-weight:700;cursor:pointer;padding:0;display:block;}
+  .modal-back:hover{text-decoration:underline;}
+  .modal-back.hidden{display:none;}
+  .modal-close{border:none;background:#f1f3f5;border-radius:6px;width:30px;height:30px;flex:none;cursor:pointer;font-size:15px;color:var(--text-secondary);}
+  .modal-close:hover{background:#e5e7eb;}
+  .modal-body{padding:16px 22px 22px;overflow:auto;}
+
+  .modal-student-list{display:flex;flex-direction:column;gap:8px;}
+  .modal-student-card{border:1px solid var(--border);border-radius:8px;padding:10px 14px;cursor:pointer;transition:box-shadow .15s ease,border-color .15s ease;}
+  .modal-student-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.1);border-color:#cbd5e1;}
+  .modal-student-name{font-weight:700;font-size:13.5px;}
+  .modal-student-meta{font-size:11.5px;color:var(--text-secondary);margin-top:2px;}
 
   .legend{display:flex;gap:16px;font-size:12px;color:var(--text-secondary);margin-top:10px;flex-wrap:wrap;}
   .legend span{display:inline-flex;align-items:center;gap:6px;}
@@ -170,6 +210,7 @@
 
 <div class="dashboard-container">
 
+  <div class="header-sticky-wrap">
   <header class="dashboard-header">
     <div style="display:flex;align-items:center;gap:14px;">
       <img src="assets/logo.png" alt="Scots English" style="height:34px;width:auto;filter:brightness(0) invert(1);opacity:.95;">
@@ -189,26 +230,88 @@
       <input type="file" id="file-upload" accept=".xlsx" style="display:none;">
     </div>
   </header>
+  </div>
   <div class="data-info" id="data-info">Đang dùng dữ liệu mẫu ban đầu.</div>
 
-  <div class="tabs">
-    <button class="tab-btn active" data-tab="overview">📈 Tổng quan</button>
-    <button class="tab-btn" data-tab="classes">📚 Theo Lớp</button>
-    <button class="tab-btn" data-tab="students">🧑‍🎓 Theo Học viên</button>
-    <button class="tab-btn" data-tab="detail">🗂️ Chi tiết</button>
-    <button class="tab-btn" data-tab="lookup">🔍 Tra cứu Học viên</button>
+  <!-- ============ ICON SVG DÙNG CHUNG CHO TAB THẬT + DOCK NỔI ============ -->
+  <template id="icon-overview"><svg class="tab-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg></template>
+  <template id="icon-classes"><svg class="tab-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg></template>
+  <template id="icon-students"><svg class="tab-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></template>
+  <template id="icon-detail"><svg class="tab-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></template>
+  <template id="icon-lookup"><svg class="tab-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></template>
+
+  <div class="tabs" id="main-tabs">
+    <div class="tab-trigger-wrap">
+      <button class="tab-btn tab-trigger active" data-tab="overview"><span class="tab-icon-use" data-icon="icon-overview"></span>Tổng quan</button>
+      <div class="tab-flyout">
+        <button type="button" class="tab-flyout-item" data-tab="overview" data-jump="section-kpi">KPI tổng quan</button>
+        <button type="button" class="tab-flyout-item" data-tab="overview" data-jump="section-charts">Biểu đồ theo Vùng / Program</button>
+        <button type="button" class="tab-flyout-item" data-tab="overview" data-jump="section-region-branch">Bảng Vùng / Chi nhánh &lt;80%</button>
+        <button type="button" class="tab-flyout-item" data-tab="overview" data-jump="section-risk">Top 15 lớp rủi ro nhất</button>
+      </div>
+    </div>
+    <div class="tab-trigger-wrap">
+      <button class="tab-btn tab-trigger" data-tab="classes"><span class="tab-icon-use" data-icon="icon-classes"></span>Theo Lớp</button>
+      <div class="tab-flyout">
+        <button type="button" class="tab-flyout-item" data-tab="classes" data-jump="section-classes-table">Chi tiết theo Lớp</button>
+        <button type="button" class="tab-flyout-item" data-tab="classes" data-jump="section-low-att">Danh sách lớp &lt;81%</button>
+      </div>
+    </div>
+    <button class="tab-btn tab-trigger" data-tab="students"><span class="tab-icon-use" data-icon="icon-students"></span>Theo Học viên</button>
+    <div class="tab-trigger-wrap">
+      <button class="tab-btn tab-trigger" data-tab="detail"><span class="tab-icon-use" data-icon="icon-detail"></span>Chi tiết</button>
+      <div class="tab-flyout">
+        <button type="button" class="tab-flyout-item" data-tab="detail" data-subtab="number-raw" data-jump="subtab-number-raw">Number of Student</button>
+        <button type="button" class="tab-flyout-item" data-tab="detail" data-subtab="list-raw" data-jump="subtab-list-raw">List of Student</button>
+      </div>
+    </div>
+    <button class="tab-btn tab-trigger" data-tab="lookup"><span class="tab-icon-use" data-icon="icon-lookup"></span>Tra cứu Học viên</button>
+  </div>
+
+  <div class="tab-dock" id="tab-dock">
+    <div class="tab-dock-item-wrap">
+      <button class="tab-dock-btn tab-trigger active" data-tab="overview" title="Tổng quan"><span class="tab-icon-use" data-icon="icon-overview"></span></button>
+      <div class="tab-flyout">
+        <button type="button" class="tab-flyout-item" data-tab="overview" data-jump="section-kpi">KPI tổng quan</button>
+        <button type="button" class="tab-flyout-item" data-tab="overview" data-jump="section-charts">Biểu đồ theo Vùng / Program</button>
+        <button type="button" class="tab-flyout-item" data-tab="overview" data-jump="section-region-branch">Bảng Vùng / Chi nhánh &lt;80%</button>
+        <button type="button" class="tab-flyout-item" data-tab="overview" data-jump="section-risk">Top 15 lớp rủi ro nhất</button>
+      </div>
+    </div>
+    <div class="tab-dock-item-wrap">
+      <button class="tab-dock-btn tab-trigger" data-tab="classes" title="Theo Lớp"><span class="tab-icon-use" data-icon="icon-classes"></span></button>
+      <div class="tab-flyout">
+        <button type="button" class="tab-flyout-item" data-tab="classes" data-jump="section-classes-table">Chi tiết theo Lớp</button>
+        <button type="button" class="tab-flyout-item" data-tab="classes" data-jump="section-low-att">Danh sách lớp &lt;81%</button>
+      </div>
+    </div>
+    <div class="tab-dock-item-wrap">
+      <button class="tab-dock-btn tab-trigger" data-tab="students" title="Theo Học viên"><span class="tab-icon-use" data-icon="icon-students"></span></button>
+      <div class="tab-dock-tooltip">Theo Học viên</div>
+    </div>
+    <div class="tab-dock-item-wrap">
+      <button class="tab-dock-btn tab-trigger" data-tab="detail" title="Chi tiết"><span class="tab-icon-use" data-icon="icon-detail"></span></button>
+      <div class="tab-flyout">
+        <button type="button" class="tab-flyout-item" data-tab="detail" data-subtab="number-raw" data-jump="subtab-number-raw">Number of Student</button>
+        <button type="button" class="tab-flyout-item" data-tab="detail" data-subtab="list-raw" data-jump="subtab-list-raw">List of Student</button>
+      </div>
+    </div>
+    <div class="tab-dock-item-wrap">
+      <button class="tab-dock-btn tab-trigger" data-tab="lookup" title="Tra cứu Học viên"><span class="tab-icon-use" data-icon="icon-lookup"></span></button>
+      <div class="tab-dock-tooltip">Tra cứu Học viên</div>
+    </div>
   </div>
 
   <!-- ============ TAB: OVERVIEW ============ -->
   <div id="tab-overview">
     <div class="section-label">Tổng quan điểm danh</div>
-    <section class="kpi-row">
+    <section class="kpi-row" id="section-kpi">
       <div class="kpi-card att"><div class="kpi-label">Total Attendance</div><div class="kpi-value-pair"><span class="kpi-value" id="o-kpi-att">0</span><span class="kpi-sep">•</span><span class="kpi-pct" id="o-kpi-att-sub">0%</span></div></div>
       <div class="kpi-card abs"><div class="kpi-label">Total Absence</div><div class="kpi-value-pair"><span class="kpi-value" id="o-kpi-abs">0</span><span class="kpi-sep">•</span><span class="kpi-pct" id="o-kpi-abs-sub">0%</span></div></div>
       <div class="kpi-card late"><div class="kpi-label">Total Late</div><div class="kpi-value-pair"><span class="kpi-value" id="o-kpi-late">0</span><span class="kpi-sep">•</span><span class="kpi-pct" id="o-kpi-late-sub">0%</span></div></div>
     </section>
 
-    <section class="chart-row">
+    <section class="chart-row" id="section-charts">
       <div class="chart-container">
         <h3>% Attendance theo Vùng</h3>
         <div class="hint">Tách 3 loại: Attendance / Absence / Late (có trọng số theo số bản ghi)</div>
@@ -221,12 +324,12 @@
       </div>
     </section>
 
-    <section class="table-section">
+    <section class="table-section" id="section-region-branch">
       <h3>Thống kê theo Vùng / Chi nhánh — Lớp có % Attendance &lt;80%</h3>
       <div id="region-branch-wrap"></div>
     </section>
 
-    <section class="chart-row">
+    <section class="chart-row" id="section-risk">
       <div class="chart-container" style="grid-column: span 2;">
         <h3>Top 15 lớp có % Attendance thấp nhất</h3>
         <div class="hint">Ưu tiên nhắc giáo viên phụ trách các lớp này</div>
@@ -237,7 +340,7 @@
 
   <!-- ============ TAB: CLASSES ============ -->
   <div id="tab-classes" class="hidden">
-    <section class="table-section">
+    <section class="table-section" id="section-classes-table">
       <h3>Chi tiết theo Lớp (theo Tháng)</h3>
       <div class="table-controls">
         <input type="text" class="search-box" id="c-search" placeholder="Tìm theo chi nhánh, lớp, program... (cách nhau bởi dấu phẩy để tìm nhiều)">
@@ -261,7 +364,7 @@
       </div>
     </section>
 
-    <section class="table-section">
+    <section class="table-section" id="section-low-att">
       <h3>Danh sách lớp có % Attendance &lt;81%</h3>
       <div class="table-controls">
         <div class="row-count" id="low-att-count">0 dòng</div>
@@ -376,26 +479,8 @@
         <div id="lk-suggestions" class="ms-panel hidden" style="width:100%;max-height:280px;overflow-y:auto;"></div>
       </div>
 
-      <div id="lk-loading" class="hidden data-info" style="margin-top:14px;">Đang tải...</div>
-      <div id="lk-result" class="hidden" style="margin-top:18px;">
-        <div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:14px;">
-          <div class="kpi-card" style="border-left-color:#94a3b8;">
-            <div class="kpi-label">Học viên</div>
-            <div class="kpi-value" id="lk-name" style="font-size:17px;">—</div>
-            <div class="kpi-sub" id="lk-meta">—</div>
-          </div>
-          <div class="kpi-card att"><div class="kpi-label">Attendance</div><div class="kpi-value" id="lk-att">0</div></div>
-          <div class="kpi-card abs"><div class="kpi-label">Absence</div><div class="kpi-value" id="lk-abs">0</div></div>
-          <div class="kpi-card late"><div class="kpi-label">Late</div><div class="kpi-value" id="lk-late">0</div></div>
-        </div>
-
-        <div id="lk-class-tabs" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"></div>
-
-        <table class="data-table">
-          <thead><tr><th>Ngày</th><th>Tháng</th><th>Trạng thái</th></tr></thead>
-          <tbody id="lk-table-body"></tbody>
-        </table>
-      </div>
+      <div id="lk-loading" class="hidden data-info" style="margin-top:14px;">Đang tải... (có thể mất tới 1 phút)</div>
+      <div id="lk-result" class="hidden" style="margin-top:18px;"></div>
       <div id="lk-empty" class="data-info" style="margin-top:14px;">Chưa chọn học viên nào.</div>
     </section>
   </div>
@@ -403,6 +488,20 @@
   <footer class="dashboard-footer">
     Cập nhật lần đầu: <span id="data-date"></span> &nbsp;•&nbsp; Dùng nút "Tải file export mới" mỗi tháng để cập nhật số liệu
   </footer>
+</div>
+
+<!-- ============ MODAL CHI TIẾT (click 1 dòng trong bảng Lớp/Học viên) ============ -->
+<div class="modal-overlay hidden" id="app-modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <button type="button" class="modal-back hidden" id="modal-back-btn">← Quay lại</button>
+        <h3 id="modal-title"></h3>
+      </div>
+      <button type="button" class="modal-close" id="modal-close-btn">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
 </div>
 
 <script>
@@ -421,7 +520,10 @@ function jsonpFetch(url){
   return new Promise((resolve, reject) => {
     const cbName = 'jsonp_cb_' + Math.random().toString(36).slice(2);
     const script = document.createElement('script');
-    const timer = setTimeout(() => { cleanup(); reject(new Error('Quá thời gian chờ phản hồi từ Apps Script (kiểm tra lại URL/kết nối mạng).')); }, 20000);
+    // Action 'studentSessions' đo thực tế dao động ~30-41s để phản hồi (Apps
+    // Script quét dữ liệu) -> để 60s cho có khoảng dư an toàn, tránh huỷ giữa
+    // chừng khi backend chỉ đang chậm chứ không phải lỗi thật.
+    const timer = setTimeout(() => { cleanup(); reject(new Error('Quá thời gian chờ phản hồi từ Apps Script (kiểm tra lại URL/kết nối mạng).')); }, 60000);
     function cleanup(){ clearTimeout(timer); delete window[cbName]; script.remove(); }
     window[cbName] = (data) => { cleanup(); resolve(data); };
     script.onerror = () => { cleanup(); reject(new Error('Không tải được dữ liệu từ Apps Script.')); };
@@ -550,6 +652,15 @@ class MultiSelect{
   setOptions(options){
     this.options = options;
     this.selected.forEach(v => { if (!options.includes(v)) this.selected.delete(v); });
+    this.renderOptions();
+    this.updateLabel();
+  }
+
+  // Set lựa chọn từ code (vd cascading filter tự chọn Vùng khi user chọn Chi
+  // nhánh) — KHÔNG gọi this.onChange, vì nơi gọi hàm này đã tự xử lý phần
+  // filters/refreshCascade của nó rồi, gọi lại onChange sẽ chạy trùng.
+  setSelectedValues(values){
+    this.selected = new Set(values);
     this.renderOptions();
     this.updateLabel();
   }
@@ -713,6 +824,7 @@ class Dashboard{
 
   init(){
     document.getElementById('data-date').textContent = new Date().toLocaleDateString('vi-VN');
+    this.setupModal();
     this.setupTabs();
     this.setupFilters();
     this.setupTableEvents();
@@ -724,9 +836,88 @@ class Dashboard{
     this.render();
   }
 
+  // ============ MODAL CHI TIẾT (click 1 dòng trong bảng Lớp/Học viên) ============
+  // 1 modal DÙNG CHUNG cho cả 2 cấp (danh sách học viên của 1 lớp, và chi tiết
+  // 1 học viên) — chỉ đổi nội dung modal-body, không tạo nhiều modal riêng.
+  setupModal(){
+    this.modalOverlay = document.getElementById('app-modal-overlay');
+    this.modalTitle = document.getElementById('modal-title');
+    this.modalBody = document.getElementById('modal-body');
+    this.modalBackBtn = document.getElementById('modal-back-btn');
+    document.getElementById('modal-close-btn').addEventListener('click', () => this.closeModal());
+    this.modalOverlay.addEventListener('click', (e) => { if (e.target === this.modalOverlay) this.closeModal(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !this.modalOverlay.classList.contains('hidden')) this.closeModal();
+    });
+  }
+
+  // Mọi lối vào modal (dù cấp 1 hay cấp 2, dù từ tab nào) đều PHẢI tự gọi hàm
+  // này để mở overlay — không được giả định modal đã mở sẵn từ bước trước,
+  // vì tab "Theo Học viên" mở thẳng cấp 2 mà không qua cấp 1.
+  openModal(title){
+    this.modalTitle.textContent = title;
+    this.modalBackBtn.classList.add('hidden');
+    this.modalBackBtn.onclick = null;
+    this.modalOverlay.classList.remove('hidden');
+  }
+
+  closeModal(){
+    this.modalOverlay.classList.add('hidden');
+  }
+
+  setModalBack(label, handler){
+    this.modalBackBtn.textContent = label;
+    this.modalBackBtn.classList.remove('hidden');
+    this.modalBackBtn.onclick = handler;
+  }
+
+  // Cấp 1 (từ tab "Theo Lớp"): danh sách học viên của 1 lớp, lấy từ dữ liệu
+  // đã có sẵn trong bộ nhớ (studentData) — KHÔNG gọi thêm API.
+  openClassStudentsModal(className){
+    this.openModal(`Học viên lớp: ${className}`);
+    const students = this.studentData.filter(s => s.class_name === className);
+    if (!students.length){
+      this.modalBody.innerHTML = '<div class="data-info">Không tìm thấy học viên nào trong lớp này.</div>';
+      return;
+    }
+    this.modalBody.innerHTML = `<div class="modal-student-list">${students.map(s => `
+      <div class="modal-student-card" data-sid="${s.student_id}" data-cls="${s.class_name}">
+        <div class="modal-student-name">${s.name}</div>
+        <div class="modal-student-meta">${s.student_id} · ${s.branch}</div>
+        <div class="modal-student-meta">Attendance ${s.att_rate.toFixed(2)}% · Absence ${s.abs_rate.toFixed(2)}% · Late ${s.late_rate.toFixed(2)}%</div>
+      </div>`).join('')}</div>`;
+    this.modalBody.querySelectorAll('.modal-student-card').forEach(card => {
+      card.addEventListener('click', () => {
+        this.openStudentDetailModal(card.dataset.sid, card.dataset.cls, () => this.openClassStudentsModal(className));
+      });
+    });
+  }
+
+  // Cấp 2 (từ tab "Theo Lớp" -> chọn 1 HV, HOẶC thẳng từ tab "Theo Học viên"):
+  // gọi Apps Script lấy chi tiết từng buổi học, dùng lại ĐÚNG hàm dựng HTML đã
+  // có sẵn cho tab "Tra cứu Học viên" (buildStudentDetailHTML) — không viết lại
+  // logic hiển thị lần 2. backHandler: có thì hiện nút quay lại cấp 1, không
+  // (tab Học viên đi thẳng vào đây) thì ẩn nút quay lại.
+  async openStudentDetailModal(studentId, className, backHandler){
+    this.openModal('Chi tiết học viên');
+    if (backHandler) this.setModalBack('← Quay lại danh sách lớp', backHandler);
+    this.modalBody.innerHTML = '<div class="data-info">Đang tải... (có thể mất tới 1 phút)</div>';
+    try{
+      const res = await appsScriptGet({ action:'studentSessions', student_id: studentId, class_name: className });
+      if (res && res.error){ this.modalBody.innerHTML = `<div class="data-info">Lỗi từ Apps Script: ${res.error}</div>`; return; }
+      this.modalBody.innerHTML = this.buildStudentDetailHTML(res, studentId);
+    }catch(err){
+      this.modalBody.innerHTML = `<div class="data-info">Lỗi tải dữ liệu: ${err.message}</div>`;
+    }
+  }
+
   loadNewData(classData, studentData, sourceLabel){
     this.classData = classData.map(processRow);
     this.studentData = studentData.map(processRow);
+    // Quan hệ 1-1 cố định Chi nhánh -> Vùng, dùng để tự chọn Vùng khi user
+    // chọn Chi nhánh (xem onChange trong setupFilters).
+    this.branchRegionMap = new Map();
+    this.classData.forEach(d => { if (d.branch && d.region) this.branchRegionMap.set(d.branch, d.region); });
     this.filters = {};
     Dashboard.FILTER_DIMS.forEach(dim => { this.filters[dim] = new Set(); });
     this.cPage = 0; this.sPage = 0;
@@ -735,29 +926,79 @@ class Dashboard{
   }
 
   setupTabs(){
-    document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn[data-tab]').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        this.activeTab = btn.dataset.tab;
-        document.getElementById('tab-overview').classList.toggle('hidden', this.activeTab !== 'overview');
-        document.getElementById('tab-classes').classList.toggle('hidden', this.activeTab !== 'classes');
-        document.getElementById('tab-students').classList.toggle('hidden', this.activeTab !== 'students');
-        document.getElementById('tab-detail').classList.toggle('hidden', this.activeTab !== 'detail');
-        document.getElementById('tab-lookup').classList.toggle('hidden', this.activeTab !== 'lookup');
-        this.render();
-      });
+    this.setupTabIcons();
+
+    // '.tab-trigger' khớp CẢ nút tab thật lẫn nút icon trong dock nổi (mục 5) —
+    // dùng chung 1 selector/1 bộ logic duy nhất, 2 nơi tự đồng bộ trạng thái active.
+    document.querySelectorAll('.tab-trigger[data-tab]').forEach(btn => {
+      btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
     });
 
     document.querySelectorAll('.tab-btn[data-subtab]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn[data-subtab]').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        const sub = btn.dataset.subtab;
-        document.getElementById('subtab-number-raw').classList.toggle('hidden', sub !== 'number-raw');
-        document.getElementById('subtab-list-raw').classList.toggle('hidden', sub !== 'list-raw');
+      btn.addEventListener('click', () => this.switchSubTab(btn.dataset.subtab));
+    });
+
+    document.querySelectorAll('.tab-flyout-item[data-jump]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.jumpToSection(btn.dataset.tab, btn.dataset.jump, btn.dataset.subtab);
       });
     });
+
+    this.setupTabDock();
+  }
+
+  // Thay SVG icon từ <template> (khai báo 1 lần) vào từng chỗ dùng
+  // (.tab-icon-use) — tránh lặp lại markup SVG dài ở cả tab thật lẫn dock.
+  setupTabIcons(){
+    document.querySelectorAll('.tab-icon-use').forEach(span => {
+      const tpl = document.getElementById(span.dataset.icon);
+      if (tpl) span.replaceWith(tpl.content.cloneNode(true));
+    });
+  }
+
+  switchTab(tabName){
+    this.activeTab = tabName;
+    document.querySelectorAll('.tab-trigger[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tabName));
+    document.getElementById('tab-overview').classList.toggle('hidden', tabName !== 'overview');
+    document.getElementById('tab-classes').classList.toggle('hidden', tabName !== 'classes');
+    document.getElementById('tab-students').classList.toggle('hidden', tabName !== 'students');
+    document.getElementById('tab-detail').classList.toggle('hidden', tabName !== 'detail');
+    document.getElementById('tab-lookup').classList.toggle('hidden', tabName !== 'lookup');
+    this.render();
+  }
+
+  switchSubTab(sub){
+    document.querySelectorAll('.tab-btn[data-subtab]').forEach(b => b.classList.toggle('active', b.dataset.subtab === sub));
+    document.getElementById('subtab-number-raw').classList.toggle('hidden', sub !== 'number-raw');
+    document.getElementById('subtab-list-raw').classList.toggle('hidden', sub !== 'list-raw');
+  }
+
+  // Bấm 1 mục trong flyout menu (hover vào tab) -> chuyển đúng tab (nếu cần),
+  // chuyển đúng subtab (nếu có), rồi cuộn tới đúng section — trừ đi chiều cao
+  // header đang dính (position:sticky) để không bị header đè lên tiêu đề section.
+  jumpToSection(tabName, sectionId, subTab){
+    if (this.activeTab !== tabName) this.switchTab(tabName);
+    if (subTab) this.switchSubTab(subTab);
+    const target = document.getElementById(sectionId);
+    if (!target) return;
+    const headerWrap = document.querySelector('.header-sticky-wrap');
+    const headerHeight = headerWrap ? headerWrap.offsetHeight : 0;
+    const top = target.getBoundingClientRect().top + window.scrollY - headerHeight - 12;
+    window.scrollTo(0, Math.max(0, top));
+  }
+
+  // Dock icon nổi: ẩn mặc định, chỉ hiện khi thanh tab thật (#main-tabs) cuộn
+  // khỏi màn hình — dùng IntersectionObserver (nhẹ hơn nhiều so với lắng nghe
+  // sự kiện 'scroll' liên tục).
+  setupTabDock(){
+    const tabsBar = document.getElementById('main-tabs');
+    const dock = document.getElementById('tab-dock');
+    if (!tabsBar || !dock) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => dock.classList.toggle('visible', !entry.isIntersecting));
+    }, { threshold: 0 });
+    io.observe(tabsBar);
   }
 
   setupUpload(){
@@ -898,7 +1139,9 @@ class Dashboard{
     try{
       const res = await appsScriptGet({ action:'studentSessions', student_id: studentId, class_name: className });
       if (res && res.error){ alert('Lỗi từ Apps Script: ' + res.error); return; }
-      this.renderLookupResult(res);
+      const result = document.getElementById('lk-result');
+      result.innerHTML = this.buildStudentDetailHTML(res, studentId);
+      result.classList.remove('hidden');
     }catch(err){
       alert('Lỗi tải dữ liệu học viên: ' + err.message);
     }finally{
@@ -906,34 +1149,45 @@ class Dashboard{
     }
   }
 
-  renderLookupResult(res){
+  // Dùng CHUNG cho cả tab "Tra cứu Học viên" và modal chi tiết học viên (mở
+  // từ tab "Theo Lớp"/"Theo Học viên") — 1 hàm dựng HTML duy nhất, chỉ khác
+  // nơi được gắn vào (xem selectLookupStudent và openStudentDetailModal).
+  buildStudentDetailHTML(res, fallbackName){
     const rows = (res && res.rows) || [];
     const student = res && res.student;
-    document.getElementById('lk-result').classList.remove('hidden');
-
-    document.getElementById('lk-name').textContent = student ? student.Name : this.lkSelected;
-    document.getElementById('lk-meta').textContent = student ? `${student.Branch} · ${student.Program} · Lớp ${student.ClassName}` : '';
+    const name = student ? student.Name : fallbackName;
+    const meta = student ? `${student.Branch} · ${student.Program} · Lớp ${student.ClassName}` : '';
 
     let att=0, abs=0, late=0;
     rows.forEach(r => {
       const t = String(r.Type||'').trim().toLowerCase();
       if (t==='attendance') att++; else if (t==='absence') abs++; else if (t==='late') late++;
     });
-    document.getElementById('lk-att').textContent = att.toLocaleString('vi-VN');
-    document.getElementById('lk-abs').textContent = abs.toLocaleString('vi-VN');
-    document.getElementById('lk-late').textContent = late.toLocaleString('vi-VN');
 
     const sorted = [...rows].sort((a,b) => String(a.Date).localeCompare(String(b.Date)));
-    const tbody = document.getElementById('lk-table-body');
-    if (!sorted.length){
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-secondary);padding:16px;">Không có dữ liệu buổi học nào cho lớp này.</td></tr>';
-      return;
-    }
-    tbody.innerHTML = sorted.map(r => {
-      const t = String(r.Type||'').trim().toLowerCase();
-      const color = t==='attendance' ? COLORS.att : t==='absence' ? COLORS.abs : t==='late' ? COLORS.late : '#94a3b8';
-      return `<tr><td>${r.Date ?? ''}</td><td>${r.Month ?? ''}</td><td><span class="status-badge" style="background:${color}">${r.Type ?? ''}</span></td></tr>`;
-    }).join('');
+    const bodyRows = sorted.length
+      ? sorted.map(r => {
+          const t = String(r.Type||'').trim().toLowerCase();
+          const color = t==='attendance' ? COLORS.att : t==='absence' ? COLORS.abs : t==='late' ? COLORS.late : '#94a3b8';
+          return `<tr><td>${r.Date ?? ''}</td><td>${r.Month ?? ''}</td><td><span class="status-badge" style="background:${color}">${r.Type ?? ''}</span></td></tr>`;
+        }).join('')
+      : '<tr><td colspan="3" style="text-align:center;color:var(--text-secondary);padding:16px;">Không có dữ liệu buổi học nào cho lớp này.</td></tr>';
+
+    return `
+      <div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:14px;">
+        <div class="kpi-card" style="border-left-color:#94a3b8;">
+          <div class="kpi-label">Học viên</div>
+          <div class="kpi-value" style="font-size:17px;">${name}</div>
+          <div class="kpi-sub">${meta}</div>
+        </div>
+        <div class="kpi-card att"><div class="kpi-label">Attendance</div><div class="kpi-value">${att.toLocaleString('vi-VN')}</div></div>
+        <div class="kpi-card abs"><div class="kpi-label">Absence</div><div class="kpi-value">${abs.toLocaleString('vi-VN')}</div></div>
+        <div class="kpi-card late"><div class="kpi-label">Late</div><div class="kpi-value">${late.toLocaleString('vi-VN')}</div></div>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>Ngày</th><th>Tháng</th><th>Trạng thái</th></tr></thead>
+        <tbody>${bodyRows}</tbody>
+      </table>`;
   }
 
   parseClassSheet(rows){
@@ -1001,7 +1255,12 @@ class Dashboard{
 
   passesOthers(d, exceptKey){
     const f = this.filters;
-    const check = (key) => key===exceptKey || f[key].size===0 || f[key].has(String(d[key]));
+    // Vùng là chiều lọc CẤP CAO HƠN Chi nhánh (quan hệ 1-1 cố định: 1 Chi
+    // nhánh luôn thuộc đúng 1 Vùng) -> option list của Vùng phải luôn hiện
+    // ĐỦ mọi Vùng, không được bị Chi nhánh đang chọn thu hẹp lại. Ngược lại,
+    // chọn Vùng vẫn thu hẹp option Chi nhánh bình thường (không đối xứng).
+    const alsoExcept = exceptKey === 'region' ? 'branch' : null;
+    const check = (key) => key===exceptKey || key===alsoExcept || f[key].size===0 || f[key].has(String(d[key]));
     return Dashboard.FILTER_DIMS.every(check);
   }
 
@@ -1024,6 +1283,15 @@ class Dashboard{
 
     const onChange = (key, selectedSet) => {
       this.filters[key] = selectedSet;
+      // Chọn Chi nhánh -> tự chọn luôn (các) Vùng tương ứng, đỡ người dùng
+      // phải chọn tay 2 lần (Chi nhánh luôn thuộc đúng 1 Vùng cố định).
+      // Bỏ chọn hết Chi nhánh thì KHÔNG tự xoá Vùng — Vùng vẫn có thể đang
+      // được dùng độc lập.
+      if (key === 'branch' && selectedSet.size > 0){
+        const regions = new Set(Array.from(selectedSet).map(b => this.branchRegionMap.get(b)).filter(Boolean));
+        this.filters.region = regions;
+        this.ms.region.setSelectedValues(regions);
+      }
       this.refreshCascade();
       this.cPage=0; this.sPage=0; this.render();
     };
@@ -1067,6 +1335,25 @@ class Dashboard{
     document.getElementById('s-next').addEventListener('click', () => {
       const maxPage = Math.max(0, Math.ceil(this.getFilteredStudents().length / this.sPageSize) - 1);
       if (this.sPage < maxPage){ this.sPage++; this.renderStudentTable(); }
+    });
+
+    // Click 1 dòng Lớp -> mở modal danh sách học viên (cấp 1). Event
+    // delegation trên tbody (gắn 1 lần ở đây) vì nội dung tbody bị thay bằng
+    // innerHTML liên tục mỗi lần render/đổi trang/sắp xếp.
+    const openClassFromRow = (e, tbodyId) => {
+      const tr = e.target.closest(`#${tbodyId} tr[data-class]`);
+      if (!tr) return;
+      this.openClassStudentsModal(tr.dataset.class);
+    };
+    document.getElementById('c-table-body').addEventListener('click', (e) => openClassFromRow(e, 'c-table-body'));
+    document.getElementById('low-att-table-body').addEventListener('click', (e) => openClassFromRow(e, 'low-att-table-body'));
+
+    // Click 1 dòng Học viên -> mở thẳng modal chi tiết học viên (cấp 2, không
+    // qua cấp 1 vì đã ở đúng mức chi tiết học viên rồi).
+    document.getElementById('s-table-body').addEventListener('click', (e) => {
+      const tr = e.target.closest('#s-table-body tr[data-sid]');
+      if (!tr) return;
+      this.openStudentDetailModal(tr.dataset.sid, tr.dataset.cls, null);
     });
   }
 
@@ -1220,7 +1507,8 @@ class Dashboard{
     if (this.cPage>maxPage) this.cPage=maxPage;
     const page = data.slice(this.cPage*this.cPageSize, this.cPage*this.cPageSize+this.cPageSize);
     document.getElementById('c-table-body').innerHTML = page.map(d => `
-      <tr><td>${d.region}</td><td>${d.branch}</td><td>${d.program}</td><td>${d.class_name}</td>
+      <tr class="clickable-row" data-class="${String(d.class_name).replace(/"/g,'&quot;')}">
+      <td>${d.region}</td><td>${d.branch}</td><td>${d.program}</td><td>${d.class_name}</td>
       <td>${d.month ?? ''}</td>
       <td>${d.att_rate.toFixed(2)}%</td>
       <td>${d.abs_rate.toFixed(2)}%</td>
@@ -1239,7 +1527,8 @@ class Dashboard{
     const data = this.getLowAttendanceRows();
     document.getElementById('low-att-count').textContent = `${data.length.toLocaleString('vi-VN')} dòng`;
     document.getElementById('low-att-table-body').innerHTML = data.map(d => `
-      <tr><td>${d.region}</td><td>${d.branch}</td><td>${d.program}</td><td>${d.class_name}</td>
+      <tr class="clickable-row" data-class="${String(d.class_name).replace(/"/g,'&quot;')}">
+      <td>${d.region}</td><td>${d.branch}</td><td>${d.program}</td><td>${d.class_name}</td>
       <td>${d.month ?? ''}</td>
       <td>${d.att_rate.toFixed(2)}%</td>
       <td>${d.abs_rate.toFixed(2)}%</td>
@@ -1254,7 +1543,8 @@ class Dashboard{
     if (this.sPage>maxPage) this.sPage=maxPage;
     const page = data.slice(this.sPage*this.sPageSize, this.sPage*this.sPageSize+this.sPageSize);
     document.getElementById('s-table-body').innerHTML = page.map(d => `
-      <tr><td>${d.region}</td><td>${d.branch}</td><td>${d.program}</td><td>${d.class_name}</td>
+      <tr class="clickable-row" data-sid="${String(d.student_id).replace(/"/g,'&quot;')}" data-cls="${String(d.class_name).replace(/"/g,'&quot;')}">
+      <td>${d.region}</td><td>${d.branch}</td><td>${d.program}</td><td>${d.class_name}</td>
       <td>${d.student_id}</td><td>${d.name}</td>
       <td>${d.att_rate.toFixed(2)}%</td>
       <td>${d.abs_rate.toFixed(2)}%</td>
