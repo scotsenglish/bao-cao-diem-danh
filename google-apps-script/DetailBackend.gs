@@ -270,19 +270,53 @@ function actionStudentSessions_(studentId, className) {
       const tabName = monthTabName_('ListOfStudent', month);
       const sheetL = ss.getSheetByName(tabName);
       if (!sheetL) return;
-      const monthRows = sheetToObjects_(sheetL);
-      // FIX: sheet "ListOfStudent_*" chứa dữ liệu thô ghi nguyên field name gốc
-      // từ LMS (scrape.js spread "...r" không đổi tên) -> mã học viên ở đây tên
-      // cột là "ID", KHÔNG phải "StudentID" (đối chiếu scrape.js: sessionRows
-      // map StudentID: r.ID). Trước đây lọc theo r.StudentID nên luôn
-      // undefined, không bao giờ khớp -> rows luôn rỗng dù học viên có dữ liệu.
-      rows = rows.concat(monthRows.filter((r) => String(r.ID) === String(studentId) && String(r.Class) === String(className)));
+      // FIX HIỆU NĂNG: sheet "ListOfStudent_*" của 1 tháng có thể tới hàng
+      // trăm nghìn dòng (dữ liệu của TẤT CẢ học viên/chi nhánh trong tháng
+      // đó). Trước đây đọc nguyên sheet (sheetToObjects_ — tải hết mọi cột,
+      // mọi dòng vào bộ nhớ) rồi mới lọc trong code -> học viên có dữ liệu ở
+      // càng nhiều tháng thì càng phải đọc lại nhiều sheet khổng lồ như vậy,
+      // dễ vượt timeout. Giờ dùng findStudentRowsInSheet_: chỉ đọc 1 cột "ID"
+      // để tìm đúng vị trí dòng khớp (TextFinder, không tải giá trị về script),
+      // rồi CHỈ đọc đầy đủ đúng những dòng đã khớp — nhanh hơn nhiều lần vì
+      // không phải tải toàn bộ sheet.
+      rows = rows.concat(findStudentRowsInSheet_(sheetL, studentId, className));
     } catch (err) {
       // bỏ qua tháng lỗi, không chặn các tháng khác
     }
   });
   rows.sort((a, b) => String(a.Date).localeCompare(String(b.Date)));
   return { rows, student: idxRow };
+}
+
+// Tìm nhanh các dòng của 1 học viên trong 1 sheet "ListOfStudent_*" (có thể
+// rất lớn) mà KHÔNG cần tải toàn bộ sheet vào bộ nhớ:
+//   1. Đọc header để biết cột "ID" nằm ở đâu.
+//   2. Dùng TextFinder tìm các ô khớp CHÍNH XÁC studentId trong đúng cột đó
+//      (native, nhanh hơn nhiều so với getValues() rồi lọc bằng JS).
+//   3. Chỉ đọc đầy đủ (mọi cột) đúng những dòng đã tìm thấy — thường chỉ vài
+//      chục dòng, thay vì hàng trăm nghìn dòng của cả sheet.
+function findStudentRowsInSheet_(sheet, studentId, className) {
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return [];
+
+  const header = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const idColIdx = header.indexOf('ID');
+  if (idColIdx === -1) return []; // sheet không có cột "ID" -> không có gì để tìm
+
+  const idColRange = sheet.getRange(2, idColIdx + 1, lastRow - 1, 1);
+  const matches = idColRange.createTextFinder(String(studentId)).matchEntireCell(true).findAll();
+  if (!matches.length) return [];
+
+  const out = [];
+  matches.forEach((cell) => {
+    const rowNum = cell.getRow();
+    const rowValues = sheet.getRange(rowNum, 1, 1, lastCol).getValues()[0];
+    const obj = {};
+    header.forEach((h, idx) => { if (h) obj[h] = rowValues[idx]; });
+    if (String(obj.Class) === String(className)) out.push(obj);
+  });
+  return out;
 }
 
 // ----------------------------------------------------------------------------

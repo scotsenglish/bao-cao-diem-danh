@@ -545,6 +545,27 @@ function appsScriptGet(params){
   return jsonpFetch(`${APPS_SCRIPT_URL}?${qs}`);
 }
 
+// Ghi đè nội dung 1 element bằng dòng chữ "Đang tải..." có đếm giây, cập
+// nhật mỗi giây — để người dùng thấy rõ trang đang thật sự làm việc (không bị
+// treo) trong lúc chờ Apps Script phản hồi (có thể mất tới ~1 phút với học
+// viên nhiều dữ liệu). Trả về hàm stop() — PHẢI gọi khi có kết quả/lỗi để
+// dừng đếm, tránh tiếp tục ghi đè lên nội dung đã render xong.
+function startLoadingTicker(el, baseText){
+  let seconds = 0;
+  // Nếu el đã tự mang class "data-info" sẵn (vd #lk-loading) thì chỉ cần đổi
+  // chữ (textContent) — tránh lồng thêm 1 div.data-info nữa bên trong (gây
+  // margin âm bị cộng dồn/lệch layout).
+  const alreadyStyled = el.classList.contains('data-info');
+  const render = () => {
+    const text = `${baseText} (${seconds}s, có thể mất tới 1 phút)...`;
+    if (alreadyStyled) el.textContent = text;
+    else el.innerHTML = `<div class="data-info">${text}</div>`;
+  };
+  render();
+  const timer = setInterval(() => { seconds++; render(); }, 1000);
+  return () => clearInterval(timer);
+}
+
 const COLORS = { done:'#2e7d32', mid:'#f9a825', bad:'#c62828', att:'#2e7d32', abs:'#c62828', late:'#f9a825' };
 
 function rateColor(pct){
@@ -905,12 +926,14 @@ class Dashboard{
   async openStudentDetailModal(studentId, className, backHandler){
     this.openModal('Chi tiết học viên');
     if (backHandler) this.setModalBack('← Quay lại danh sách lớp', backHandler);
-    this.modalBody.innerHTML = '<div class="data-info">Đang tải... (có thể mất tới 1 phút)</div>';
+    const stopTicker = startLoadingTicker(this.modalBody, 'Đang tải dữ liệu học viên');
     try{
       const res = await appsScriptGet({ action:'studentSessions', student_id: studentId, class_name: className });
+      stopTicker();
       if (res && res.error){ this.modalBody.innerHTML = `<div class="data-info">Lỗi từ Apps Script: ${res.error}</div>`; return; }
       this.modalBody.innerHTML = this.buildStudentDetailHTML(res, studentId);
     }catch(err){
+      stopTicker();
       this.modalBody.innerHTML = `<div class="data-info">Lỗi tải dữ liệu: ${err.message}</div>`;
     }
   }
@@ -1139,14 +1162,18 @@ class Dashboard{
     this.lkActiveClass = className;
     document.getElementById('lk-empty').classList.add('hidden');
     document.getElementById('lk-result').classList.add('hidden');
-    document.getElementById('lk-loading').classList.remove('hidden');
+    const lkLoading = document.getElementById('lk-loading');
+    lkLoading.classList.remove('hidden');
+    const stopTicker = startLoadingTicker(lkLoading, 'Đang tải dữ liệu học viên');
     try{
       const res = await appsScriptGet({ action:'studentSessions', student_id: studentId, class_name: className });
+      stopTicker();
       if (res && res.error){ alert('Lỗi từ Apps Script: ' + res.error); return; }
       const result = document.getElementById('lk-result');
       result.innerHTML = this.buildStudentDetailHTML(res, studentId);
       result.classList.remove('hidden');
     }catch(err){
+      stopTicker();
       alert('Lỗi tải dữ liệu học viên: ' + err.message);
     }finally{
       document.getElementById('lk-loading').classList.add('hidden');
