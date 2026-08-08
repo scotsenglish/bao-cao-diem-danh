@@ -1485,6 +1485,20 @@ class Dashboard{
     }, { indexAxis:'y', scales:{ x:{ suggestedMax:100 } }, plugins:{legend:{display:false}} });
   }
 
+  // Đếm SỐ LỚP THẬT khác nhau (distinct class_name, không phải số dòng
+  // lớp-tháng) — 1 lớp chỉ tính 1 lần dù nó xuất hiện ở nhiều tháng.
+  // under80: số lớp có ÍT NHẤT 1 tháng rớt dưới 80% (trong dữ liệu đang lọc).
+  distinctClassStats(rows){
+    const total = new Set();
+    const under80 = new Set();
+    rows.forEach(d => {
+      const key = `${d.branch}||${d.class_name}`;
+      total.add(key);
+      if (d.att_rate < 81) under80.add(key);
+    });
+    return { total: total.size, under80: under80.size };
+  }
+
   renderRegionBranchTable(){
     const data = this.getFilteredClasses();
     const regionAgg = this.groupBy(data, 'region');
@@ -1495,16 +1509,14 @@ class Dashboard{
       const regionRows = regionAgg[region];
       const branchAgg = this.groupBy(regionRows, 'branch');
       const branchLabels = Object.keys(branchAgg).sort((a,b)=>a.localeCompare(b,'vi'));
-      const regionTotal = regionRows.length;
-      const regionUnder80 = regionRows.filter(d => d.att_rate < 81).length;
-      const regionPct = regionTotal ? (regionUnder80/regionTotal*100) : 0;
-      html += `<tr style="background:#f4f6f9;font-weight:700;"><td>${region}</td><td>— Tổng Vùng —</td><td>${regionUnder80}</td><td>${regionPct.toFixed(2)}%</td></tr>`;
+      const regionStats = this.distinctClassStats(regionRows);
+      const regionPct = regionStats.total ? (regionStats.under80/regionStats.total*100) : 0;
+      html += `<tr style="background:#f4f6f9;font-weight:700;"><td>${region}</td><td>— Tổng Vùng —</td><td>${regionStats.under80}</td><td>${regionPct.toFixed(2)}%</td></tr>`;
       branchLabels.forEach(branch => {
         const rows = branchAgg[branch];
-        const total = rows.length;
-        const under80 = rows.filter(d => d.att_rate < 81).length;
-        const pct = total ? (under80/total*100) : 0;
-        html += `<tr><td></td><td>${branch}</td><td>${under80}</td><td><span class="status-badge" style="background:${pct>0?rateColor(100-pct):COLORS.done}">${pct.toFixed(2)}%</span></td></tr>`;
+        const stats = this.distinctClassStats(rows);
+        const pct = stats.total ? (stats.under80/stats.total*100) : 0;
+        html += `<tr><td></td><td>${branch}</td><td>${stats.under80}</td><td><span class="status-badge" style="background:${pct>0?rateColor(100-pct):COLORS.done}">${pct.toFixed(2)}%</span></td></tr>`;
       });
     });
     html += '</tbody></table>';
