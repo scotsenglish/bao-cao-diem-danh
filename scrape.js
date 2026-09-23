@@ -61,6 +61,18 @@ const PAGE_TIMEOUT_MS = 45_000;
 // đặt sớm hơn thực tế không gây hại gì, chỉ là dư ra không ảnh hưởng kết quả.
 const ALL_HISTORY_ANCHOR = '2025-01-01';
 
+// "Hôm nay" theo giờ Việt Nam (không phải giờ UTC của máy chạy GitHub Actions)
+// — dùng để lọc bỏ các buổi học có ngày SAU hôm nay. LMS có thể đã điền sẵn
+// điểm danh (mặc định/nháp) cho buổi CHƯA diễn ra, khiến báo cáo "Number of
+// Student" chính thức (không tính buổi tương lai) và dữ liệu API thô
+// (ReportStuAttendanceList, có tính cả buổi tương lai) bị lệch nhau.
+function todayVN_() {
+  const parts = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).formatToParts(new Date());
+  const get = (type) => parts.find((p) => p.type === type).value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+const TODAY_VN = todayVN_();
+
 const REPO_ROOT = path.join(__dirname);
 const OUTPUT_XLSX = path.join(REPO_ROOT, 'data', 'latest.xlsx');
 const CHECKPOINT_FILE = path.join(REPO_ROOT, 'data', '.attendance_checkpoint.json');
@@ -166,8 +178,8 @@ async function fetchBranches(page, staffId) {
   }, staffId);
 }
 
-async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo, detailDateFrom }) {
-  return page.evaluate(async ({ staffId, branch, dateFrom, dateTo, detailDateFrom }) => {
+async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo, detailDateFrom, todayVN }) {
+  return page.evaluate(async ({ staffId, branch, dateFrom, dateTo, detailDateFrom, todayVN }) => {
     const safeParse = (res) => {
       try { return JSON.parse(res.d.result).Table || []; } catch { return []; }
     };
@@ -188,6 +200,17 @@ async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo, detail
       const t = new Date(dateText).getTime();
       if (isNaN(t)) return true;
       return t >= detailCutoffTime;
+    };
+    // LMS có thể đã điền sẵn điểm danh (mặc định/nháp) cho buổi CHƯA diễn ra
+    // (vd lớp học Thứ Năm hàng tuần, buổi Thứ Năm tuần sau đã có sẵn dữ liệu
+    // dù chưa tới ngày học) — báo cáo "Number of Student" chính thức trên LMS
+    // không tính các buổi này, nên phải lọc bỏ để số liệu khớp đúng LMS.
+    const todayCutoffTime = todayVN ? new Date(`${todayVN}T23:59:59`).getTime() : null;
+    const isNotFuture = (dateText) => {
+      if (!todayCutoffTime) return true;
+      const t = new Date(dateText).getTime();
+      if (isNaN(t)) return true;
+      return t <= todayCutoffTime;
     };
 
     const semRes = await fetch('/data/setup.asmx/CounSemester', {
@@ -222,8 +245,13 @@ async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo, detail
     // Gọi API với khoảng ngày ĐẦY ĐỦ (dateFrom -> dateTo, có thể là toàn bộ
     // lịch sử) — cần vậy để Class Summary Monthly / Student Summary tính đúng
     // tổng số liệu qua các tháng. numberData/listData ở đây có thể rất nhiều dòng.
-    const numberData = await callReport('NUMBER');
-    const listData = await callReport('LIST');
+    const numberDataRaw = await callReport('NUMBER');
+    const listDataRaw = await callReport('LIST');
+    // Lọc bỏ buổi tương lai NGAY TỪ NGUỒN — áp dụng cho mọi thứ tính ra từ
+    // numberData/listData bên dưới (numberRows, sessionRows, listRawRows),
+    // tránh phải lọc riêng lẻ nhiều chỗ và lỡ sót chỗ nào.
+    const numberData = numberDataRaw.filter((r) => isNotFuture(r.Date));
+    const listData = listDataRaw.filter((r) => isNotFuture(r.Date));
 
     // numberRows / listRawRows: bản RAW cho tab "Chi tiết" trên dashboard —
     // CHỈ giữ lại các dòng gần đây (>= detailDateFrom) để tránh nhúng hàng
@@ -273,7 +301,7 @@ async function fetchBranchData(page, { staffId, branch, dateFrom, dateTo, detail
       numberRows, sessionRows, listRawRows,
       _debugCounts: { numberDataTotal: numberData.length, listDataTotal: listData.length },
     };
-  }, { staffId, branch, dateFrom, dateTo, detailDateFrom });
+  }, { staffId, branch, dateFrom, dateTo, detailDateFrom, todayVN });
 }
 
 // ---------------------------------------------------------------------------
@@ -513,6 +541,7 @@ async function writeLiveDataJson() {
 async function main() {
   const { dateFrom, dateTo } = computeDateRange(MONTHS_BACK_RAW);
   console.log(`📅 Khoảng thời gian lấy dữ liệu (tổng hợp): ${dateFrom} → ${dateTo} (MONTHS_BACK=${MONTHS_BACK_RAW})`);
+  console.log(`🗓️  Hôm nay (giờ VN): ${TODAY_VN} — buổi học sau ngày này sẽ bị lọc bỏ khỏi mọi số liệu (xem isNotFuture).`);
 
   // Khoảng ngày riêng cho 2 sheet raw (tab "Chi tiết") — luôn chỉ vài tháng gần
   // nhất, không phụ thuộc MONTHS_BACK ở trên (xem giải thích ở khai báo hằng số).
@@ -557,7 +586,7 @@ async function main() {
       try {
         console.log(`➡️  ${branch.brch_name}`);
         const { numberRows, sessionRows, listRawRows, _debugCounts } = await fetchBranchData(p, {
-          staffId: STAFF_ID, branch, dateFrom, dateTo, detailDateFrom,
+          staffId: STAFF_ID, branch, dateFrom, dateTo, detailDateFrom, todayVN: TODAY_VN,
         });
         state.numberRows.push(...numberRows);
         state.sessionRows.push(...sessionRows);
